@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: x4g4t-config
+  namespace: x4g4t
+  labels:
+    app.kubernetes.io/name: x4g4t-config
+    app.kubernetes.io/part-of: x4g4t-platform
+data:
+  # Core Infrastructure Endpoints
+  DATABASE_URL: "postgresql://postgres:postgres@x4g4t-postgres:5432/x4g4t"
+  REDIS_URL: "redis://x4g4t-redis:6379"
+  ELASTICSEARCH_URL: "http://x4g4t-elasticsearch:9200"
+  ELASTICSEARCH_INDEX: "x4g4t-logs"
+  ELASTICSEARCH_INDEX_ROTATION: "daily"
+  ALLOW_LOCAL_DOWNSTREAM: "true"
+  NEXT_PUBLIC_GATEWAY_URL: "http://localhost:4000"
+  PROXY_INTERNAL_URL: "http://x4g4t-proxy:4000"
+  PORTAL_BASE_URL: "http://localhost:3000"
+  LOG_LEVEL: "info"
+
+  # Workspace & Subnet Boundaries
+  DEFAULT_ORG_SLUG: "org_default_x4g4t"
+  ENTERPRISE_ORG_SLUG: "org_default_x4g4t"
+  CORPORATE_VPN_CIDRS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+  # Enterprise Role-Based Access Control (AD Group Mappings)
+  ADMIN_GROUPS: "X4G4T-Admins,Domain Admins,Administrators,admins,secops,org:admin"
+  DEVELOPER_GROUPS: "X4G4T-Developers,Domain Users,Developers,engineers,org:member"
+  DEFAULT_USER_ROLE: "admin"
+  DEFAULT_USER_ID: "usr_dev_admin"
+
+  # Active IAM Identity Provider Selection ('clerk', 'workos', 'oidc', 'cognito', 'azure_ad', 'local')
+  IAM_PROVIDER: "clerk"
+
+  # Clerk IAM Configuration (Public URLs & Issuer)
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
+  NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: "/dashboard"
+  NEXT_PUBLIC_CLERK_FORCE_REDIRECT_URL: "/dashboard"
+  CLERK_ISSUER: "https://exotic-fly-2228.clerk.accounts.dev"
+
+  # Enterprise OIDC Configuration (Public)
+  OIDC_ISSUER_URL: ""
+  OIDC_CLIENT_ID: ""
+  OIDC_AUDIENCE: ""
+
+  # AWS Cognito Configuration (Public)
+  COGNITO_USER_POOL_ID: ""
+  COGNITO_CLIENT_ID: ""
+  COGNITO_REGION: "us-east-1"
+
+  # Azure Active Directory / Microsoft Entra ID (Public)
+  AZURE_TENANT_ID: ""
+  AZURE_CLIENT_ID: ""
+
+  # WorkOS Enterprise SSO (Public)
+  WORKOS_CLIENT_ID: ""

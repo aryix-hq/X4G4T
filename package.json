@@ -1,0 +1,17 @@
+{
+  "name": "x4g4t",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "db:bootstrap": "pnpm --filter @x4g4t/db db:bootstrap",
+    "postinstall": "node scripts/patch-clerk-next15.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.4"
+  },
+  "packageManager": "pnpm@12.4.2"
+}

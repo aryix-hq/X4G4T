@@ -1,0 +1,42 @@
+# ============================================================================
+# CoreDNS Transparent AI Gateway DNS Sinkhole Patch
+# Automatically routes all outbound LLM traffic to X4G4T Proxy
+# ============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+
+        # --------------------------------------------------------------------
+        # X4G4T Transparent AI Gateway Rewrites
+        # Redirects public LLM API calls to internal X4G4T proxy service
+        # --------------------------------------------------------------------
+        rewrite name exact api.openai.com x4g4t-proxy.x4g4t.svc.cluster.local
+        rewrite name exact generativelanguage.googleapis.com x4g4t-proxy.x4g4t.svc.cluster.local
+        rewrite name exact api.anthropic.com x4g4t-proxy.x4g4t.svc.cluster.local
+        rewrite name exact proxy.x4g4t.internal x4g4t-proxy.x4g4t.svc.cluster.local
+    }
+

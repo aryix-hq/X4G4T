@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-web
+  namespace: x4g4t
+  labels:
+    app: x4g4t-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: x4g4t-web
+  template:
+    metadata:
+      labels:
+        app: x4g4t-web
+    spec:
+      containers:
+        - name: web
+          image: x4g4t-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PORT
+              value: "3000"
+          envFrom:
+            - configMapRef:
+                name: x4g4t-config
+            - secretRef:
+                name: x4g4t-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/metrics
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/metrics
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x4g4t-web
+  namespace: x4g4t
+  labels:
+    app: x4g4t-web
+spec:
+  type: NodePort
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30002
+      name: http
+  selector:
+    app: x4g4t-web
+

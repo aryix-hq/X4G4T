@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-proxy
+  namespace: x4g4t
+  labels:
+    app: x4g4t-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: x4g4t-proxy
+  template:
+    metadata:
+      labels:
+        app: x4g4t-proxy
+    spec:
+      containers:
+        - name: proxy
+          image: x4g4t-proxy:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4000
+              name: http
+          env:
+            - name: PORT
+              value: "4000"
+          envFrom:
+            - configMapRef:
+                name: x4g4t-config
+            - secretRef:
+                name: x4g4t-secrets
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x4g4t-proxy
+  namespace: x4g4t
+  labels:
+    app: x4g4t-proxy
+spec:
+  type: NodePort
+  ports:
+    - port: 4000
+      targetPort: 4000
+      nodePort: 30000
+      name: http
+    - port: 80
+      targetPort: 4000
+      name: http-default
+  selector:
+    app: x4g4t-proxy
+

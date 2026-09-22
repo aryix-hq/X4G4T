@@ -1,0 +1,22 @@
+{
+  "name": "@x4g4t/policy-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@x4g4t/tsconfig": "workspace:*",
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

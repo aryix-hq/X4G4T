@@ -1,0 +1,12 @@
+node_modules
+.git
+.gitignore
+.next
+dist
+.turbo
+out
+*.log
+.env
+.env.local
+.env*.local
+

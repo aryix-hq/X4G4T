@@ -1,0 +1,65 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Production Builds & Output
+dist
+build
+.next
+out
+*.tsbuildinfo
+
+# Turborepo Cache
+.turbo
+
+# Environment Variables & Local Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+k8s/02-secrets.yaml
+!k8s/02-secrets.example.yaml
+!.env.example
+!.env.docker.example
+
+# Python Environments (if any)
+venv/
+.venv/
+env/
+__pycache__/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Editor & IDE Directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Testing & Coverage
+coverage
+.nyc_output
+
+# AI Agent & Scratchpad Residue
+.agent/
+.antigravity/
+.cursor/
+.windsurf/
+scratch/
+*.prompt.md
+*.plan.md
+

@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+}
+
+body {
+  background-color: rgb(2 6 23);
+  color: rgb(248 250 252);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+

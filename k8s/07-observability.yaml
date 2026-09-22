@@ -1,0 +1,197 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: x4g4t-prometheus-config
+  namespace: x4g4t
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+
+    scrape_configs:
+      - job_name: "x4g4t-proxy"
+        metrics_path: "/metrics"
+        static_configs:
+          - targets: ["x4g4t-proxy.x4g4t.svc.cluster.local:4000"]
+            labels:
+              environment: "kubernetes"
+              service: "x4g4t-gateway"
+
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-prometheus
+  namespace: x4g4t
+  labels:
+    app: x4g4t-prometheus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: x4g4t-prometheus
+  template:
+    metadata:
+      labels:
+        app: x4g4t-prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.51.2
+          ports:
+            - containerPort: 9090
+              name: web
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: storage
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: x4g4t-prometheus-config
+        - name: storage
+          persistentVolumeClaim:
+            claimName: x4g4t-prometheus-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x4g4t-prometheus
+  namespace: x4g4t
+spec:
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: web
+  selector:
+    app: x4g4t-prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: x4g4t-grafana-datasources
+  namespace: x4g4t
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://x4g4t-prometheus:9090
+        isDefault: true
+        editable: true
+
+      - name: Elasticsearch
+        type: elasticsearch
+        access: proxy
+        url: http://x4g4t-elasticsearch:9200
+        database: "x4g4t-logs-*"
+        editable: true
+        jsonData:
+          timeField: "@timestamp"
+          esVersion: "8.0.0"
+          interval: "Daily"
+          logMessageField: "toolName"
+          logLevelField: "verdict"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: x4g4t-grafana-dashboards-provider
+  namespace: x4g4t
+data:
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: "X4G4T"
+        orgId: 1
+        folder: "X4G4T Observability"
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-grafana
+  namespace: x4g4t
+  labels:
+    app: x4g4t-grafana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: x4g4t-grafana
+  template:
+    metadata:
+      labels:
+        app: x4g4t-grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.4.2
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Admin"
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/grafana
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: x4g4t-grafana-pvc
+        - name: datasources
+          configMap:
+            name: x4g4t-grafana-datasources
+        - name: provider
+          configMap:
+            name: x4g4t-grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: x4g4t-grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x4g4t-grafana
+  namespace: x4g4t
+spec:
+  type: NodePort
+  ports:
+    - port: 3001
+      targetPort: 3000
+      nodePort: 30001
+      name: http
+  selector:
+    app: x4g4t-grafana
+

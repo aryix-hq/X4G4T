@@ -1,0 +1,26 @@
+{
+  "name": "@x4g4t/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:bootstrap": "tsx src/bootstrap.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.39.0",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@x4g4t/tsconfig": "workspace:*",
+    "@types/node": "^20.14.9",
+    "drizzle-kit": "^0.30.0",
+    "tsx": "^4.23.13",
+    "typescript": "^5.5.4"
+  }
+}

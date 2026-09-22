@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-elasticsearch
+  namespace: x4g4t
+  labels:
+    app: x4g4t-elasticsearch
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: x4g4t-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: x4g4t-elasticsearch
+    spec:
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+          ports:
+            - containerPort: 9200
+              name: http
+          env:
+            - name: discovery.type
+              value: "single-node"
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          volumeMounts:
+            - name: elasticsearch-data
+              mountPath: /usr/share/elasticsearch/data
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: elasticsearch-data
+          persistentVolumeClaim:
+            claimName: x4g4t-elasticsearch-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x4g4t-elasticsearch
+  namespace: x4g4t
+spec:
+  ports:
+    - port: 9200
+      targetPort: 9200
+      name: http
+  selector:
+    app: x4g4t-elasticsearch
+
