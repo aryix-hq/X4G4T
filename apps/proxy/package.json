@@ -1,6 +1,15 @@
 {
   "name": "@x4g4t/proxy",
   "version": "0.1.0",
+  "description": "Zero-latency, headless policy firewall and Data Leakage Prevention (DLP) proxy for AI agents and Model Context Protocol (MCP) servers.",
+  "keywords": [
+    "mcp-proxy",
+    "agent-guardrails",
+    "dlp-proxy",
+    "ai-agent-security",
+    "model-context-protocol",
+    "rate-limiting"
+  ],
   "private": true,
   "type": "module",
   "main": "./src/index.ts",

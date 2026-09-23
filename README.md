@@ -1,19 +1,22 @@
-# X4G4T 🛡️
+# X4G4T: Zero-latency, headless policy firewall and Data Leakage Prevention (DLP) proxy for AI agents and Model Context Protocol (MCP) servers.
 
 <div align="center">
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Test Suite](https://img.shields.io/badge/Tests-100%25_Passing-brightgreen.svg)](https://github.com/aryix-hq/X4G4T)
 [![AST Evaluation](https://img.shields.io/badge/AST_Evaluation-%3C0.2ms-orange.svg)](docs/PERFORMANCE_BENCHMARKS.md)
-[![Docker Compose](https://img.shields.io/badge/Docker_Compose-Turn--Key_Stack-2496ED.svg)](docs/DOCKER_COMPOSE_STACK.md)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-Cloud_Native-326CE5.svg)](scripts/deploy-k8s.sh)
-[![Observability](https://img.shields.io/badge/Observability-Prometheus_%26_Grafana-F46800.svg)](docs/OBSERVABILITY_GRAFANA_PROVISIONING.md)
+[![mcp-proxy](https://img.shields.io/badge/topic-mcp--proxy-blue.svg)](https://github.com/topics/mcp-proxy)
+[![agent-guardrails](https://img.shields.io/badge/topic-agent--guardrails-green.svg)](https://github.com/topics/agent-guardrails)
+[![dlp-proxy](https://img.shields.io/badge/topic-dlp--proxy-purple.svg)](https://github.com/topics/dlp-proxy)
+[![ai-agent-security](https://img.shields.io/badge/topic-ai--agent--security-red.svg)](https://github.com/topics/ai-agent-security)
+[![model-context-protocol](https://img.shields.io/badge/topic-model--context--protocol-yellow.svg)](https://github.com/topics/model-context-protocol)
+[![rate-limiting](https://img.shields.io/badge/topic-rate--limiting-teal.svg)](https://github.com/topics/rate-limiting)
 
-**The Open-Source AI Agent Security Firewall, Governance Gateway & Tool Interceptor.**
+**The Headless AI Agent Security Firewall, Model Context Protocol (MCP) Proxy & Zero-Trust Governance Gateway.**
 
-*Sub-millisecond runtime policy enforcement, zero-trust LLM credential substitution, in-flight DLP redaction, SSRF protection, and tamper-evident audit logging for autonomous agents and MCP servers.*
+*Sub-millisecond runtime policy enforcement, zero-trust LLM credential substitution, in-flight DLP redaction, SSRF protection, sliding-window rate limiting, and tamper-evident audit logging for autonomous agents and MCP servers.*
 
-[Quickstart](#-30-second-turn-key-quickstart) • [Architecture](#-architecture) • [Features](#-core-capabilities) • [Kubernetes](#-kubernetes-deployment) • [Observability](#-observability--telemetry) • [Docs](docs/) • [Contributing](CONTRIBUTING.md)
+[Quickstart](#-30-second-turn-key-quickstart) • [Architecture](#-architecture) • [Features](#-core-capabilities) • [Troubleshooting Recipes](#-common-troubleshooting-recipes--technical-query-index) • [Kubernetes](#-kubernetes-deployment) • [Observability](#-observability--telemetry) • [Docs](docs/) • [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -127,6 +130,85 @@ docker compose ps
 | **Multi-Cluster Distributed Sync** | Single Cluster | Multi-Region Anycast Control Plane |
 | **WORM Compliance Cold Storage** | Daily Indices | AWS S3 Object Lock / 7-Year Retention |
 | **24/7 Production SLA & Support** | Community GitHub Issues | Enterprise SLA & Dedicated Support |
+
+---
+
+## 🛠️ Common Troubleshooting Recipes & Technical Query Index
+
+Engineers and SecOps teams deploy X4G4T to resolve specific production agent risks. Below are direct solutions to the most common queries:
+
+### 1. `mcp-proxy` • Securing Cursor & Claude Desktop Model Context Protocol Servers
+* **Problem**: Cursor or Claude Desktop agents executing tool calls directly against local or remote MCP servers without policy inspection or parameter validation.
+* **Solution**: Point your MCP client to the X4G4T headless JSON-RPC 2.0 interception endpoint (`POST /v1/mcp`):
+```json
+// .cursor/mcp.json or Claude Desktop configuration
+{
+  "mcpServers": {
+    "secure-tools": {
+      "url": "http://localhost:4000/v1/mcp",
+      "headers": {
+        "x-x4g4t-developer-token": "dev_session_token"
+      }
+    }
+  }
+}
+```
+* **Verdict**: X4G4T inspects `tools/call`, checks arguments against active AST policies, and returns JSON-RPC error `-32001 (Policy Violation)` or `[X4G4T HELD]` if approval is required.
+
+---
+
+### 2. `agent-guardrails` • Blocking Destructive SQL Queries & Cloud Mutation
+* **Problem**: Autonomous coding agents generating and executing `DROP TABLE`, `TRUNCATE`, or `DELETE FROM users` without human oversight.
+* **Solution**: X4G4T evaluates pure in-memory AST rules in **<200µs** ($0.2\,\text{ms}$) with zero database latency on the ingress path:
+```bash
+curl -X POST http://localhost:4000/v1/gateway/execute \
+  -H "x-x4g4t-developer-token: dev_admin" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "agent-sql-worker",
+    "tool_name": "run_sql_query",
+    "arguments": { "query": "DROP TABLE users;" },
+    "downstream_url": "https://api.internal/sql"
+  }'
+```
+* **Response**: Immediately rejected with `HTTP 422 Unprocessable Entity`:
+```json
+{
+  "error": {
+    "code": "POLICY_VIOLATION",
+    "message": "Triggered policy 'Catch Table Drops' for tool 'run_sql_query'"
+  }
+}
+```
+
+---
+
+### 3. `dlp-proxy` • In-Flight PII Redaction & Secret Leak Prevention
+* **Problem**: Autonomous agents passing customer credit card numbers, US SSNs, AWS Access Keys, or RSA private keys into third-party cloud LLM APIs.
+* **Solution**: In-flight Data Leakage Prevention (DLP) scans payloads with **Luhn Mod-10 checksum validation** and regex pattern engines, redacting secrets prior to upstream egress:
+```text
+Original:  "User CC: 4532-0150-1234-5678, AWS Key: AKIAIOSFODNN7EXAMPLE"
+Redacted:  "User CC: [REDACTED_CC], AWS Key: [REDACTED_AWS_KEY]"
+```
+
+---
+
+### 4. `rate-limiting` • Distributed Sliding-Window Throttling for AI Agents
+* **Problem**: Runaway agent recursive loops consuming high LLM token quotas or DoS-ing downstream microservices.
+* **Solution**: Distributed sliding-window rate limiting backed by atomic Redis Lua scripts (`SLIDING_WINDOW_LUA_SCRIPT`) per IP, per user identity, or per organization:
+```http
+HTTP/1.1 429 Too Many Requests
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 3410
+Retry-After: 3410
+```
+
+---
+
+### 5. `ai-agent-security` • SSRF & Cloud Metadata Protection
+* **Problem**: Agents instructed via indirect prompt injection to fetch internal VPC resources (`10.0.0.0/8`, `192.168.0.0/16`) or AWS/GCP instance metadata (`http://169.254.169.254/latest/meta-data/`).
+* **Solution**: Outbound HTTP requests to private RFC1918 subnets, loopbacks (`127.0.0.1`), and link-local cloud metadata IPs are rejected with `HTTP 403 SSRF_BLOCKED`.
 
 ---
 
