@@ -32,6 +32,7 @@ RUN pnpm install --frozen-lockfile
 # Copy source code and build Next.js application
 COPY --from=pruner /app/out/full/ .
 COPY turbo.json turbo.json
+RUN mkdir -p /app/apps/web/public
 RUN pnpm --filter @x4g4t/web... build
 
 # ----------------------------------------------------
