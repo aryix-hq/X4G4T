@@ -29,10 +29,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck all workspace packages
+      - name: Build shared packages
         run: |
-          pnpm --filter @x4g4t/policy-engine exec tsc --noEmit
-          pnpm --filter @x4g4t/db exec tsc --noEmit
+          pnpm --filter @x4g4t/policy-engine build
+          pnpm --filter @x4g4t/db build
+
+      - name: Typecheck applications
+        run: |
           pnpm --filter @x4g4t/proxy exec tsc --noEmit
           pnpm --filter @x4g4t/web exec tsc --noEmit
 
