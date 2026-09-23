@@ -115,6 +115,7 @@ services:
   # 6. Fastify Proxy Gateway: Low-Latency AI Firewall & Interception Engine
   # --------------------------------------------------------------------------
   proxy:
+    image: ghcr.io/aryix-hq/x4g4t-proxy:latest
     build:
       context: .
       dockerfile: apps/proxy/Dockerfile
@@ -150,6 +151,7 @@ services:
   # 7. Next.js Web Control Plane: Enterprise Policy & Audit Dashboard
   # --------------------------------------------------------------------------
   web:
+    image: ghcr.io/aryix-hq/x4g4t-web:latest
     build:
       context: .
       dockerfile: apps/web/Dockerfile

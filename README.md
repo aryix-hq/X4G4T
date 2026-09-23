@@ -94,6 +94,14 @@ docker compose ps
 | **Prometheus Raw Metrics** | [http://localhost:9090](http://localhost:9090) | Scrapes `/metrics` every 5 seconds |
 | **Elasticsearch Cluster** | [http://localhost:9200](http://localhost:9200) | Daily index: `x4g4t-logs-YYYY.MM.DD` |
 
+### 📦 Pre-Built GitHub Container Registry (GHCR) Images
+Pre-built multi-architecture (`linux/amd64`, `linux/arm64`) images are published to GitHub Container Registry:
+```bash
+# Pull pre-built images directly (no local compilation needed)
+docker pull ghcr.io/aryix-hq/x4g4t-proxy:latest
+docker pull ghcr.io/aryix-hq/x4g4t-web:latest
+```
+
 ---
 
 ## 📦 Core Capabilities

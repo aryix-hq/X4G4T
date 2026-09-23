@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: x4g4t-web:latest
+          image: ghcr.io/aryix-hq/x4g4t-web:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000

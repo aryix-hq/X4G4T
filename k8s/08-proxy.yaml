@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: proxy
-          image: x4g4t-proxy:latest
+          image: ghcr.io/aryix-hq/x4g4t-proxy:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4000
