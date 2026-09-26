@@ -372,3 +372,4 @@ pnpm test
 ## 📄 License
 
 X4G4T is open-source software licensed under the **[Apache License, Version 2.0](LICENSE)**.
+
