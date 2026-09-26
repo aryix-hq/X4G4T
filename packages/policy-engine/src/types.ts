@@ -56,12 +56,15 @@ export interface EvaluationContext {
   toolName: string;
   arguments: Record<string, unknown>;
   iam?: IamContext;
+  network?: Record<string, unknown>;
 }
 
 export interface ShadowEvaluation {
   policyId: string;
   policyName: string;
   wouldVerdict: PolicyAction;
+  projectedVerdict?: string;
+  violatingRuleId?: string;
   reason?: string;
 }
 

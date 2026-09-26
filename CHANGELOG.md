@@ -108,3 +108,4 @@ The foundational open-source release of X4G4T (`@aryix-hq/x4g4t`), introducing z
   - Pre-provisioned Grafana dashboard (`x4g4t-overview.json`) with 17 real-time telemetry panels.
 - **Relational Schema & Migrations (`packages/db`)**:
   - Drizzle ORM schema defining organizations, users, API keys, policies, execution logs, and HITL holds.
+
