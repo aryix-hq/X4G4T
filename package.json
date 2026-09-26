@@ -24,9 +24,9 @@
     "postinstall": "node scripts/patch-clerk-next15.js"
   },
   "devDependencies": {
-    "@types/node": "^20.14.9",
-    "turbo": "^2.0.0",
-    "typescript": "^5.5.4"
+    "@types/node": "^26.6.2",
+    "turbo": "^2.11.3",
+    "typescript": "^7.0.2"
   },
   "packageManager": "pnpm@12.4.2"
 }
