@@ -47,7 +47,13 @@ export async function recordShadowEvaluation(
     };
 
     existing.totalEvaluated += 1;
-    if (s.wouldVerdict === "BLOCK" || s.wouldVerdict === "REQUIRE_APPROVAL") {
+    const isBlocked =
+      s.wouldVerdict === "BLOCK" ||
+      s.wouldVerdict === "REQUIRE_APPROVAL" ||
+      (s as any).projectedVerdict === "SHADOW_BLOCKED" ||
+      (s as any).projectedVerdict === "BLOCK";
+
+    if (isBlocked) {
       existing.wouldHaveBlocked += 1;
     } else {
       existing.wouldHavePassed += 1;
@@ -60,7 +66,7 @@ export async function recordShadowEvaluation(
       const redis = getRedisConnection();
       const redisKey = `shadow:metric:${orgId}:${s.policyId}:${bucketHourIso}`;
       await redis.hincrby(redisKey, "totalEvaluated", 1);
-      if (s.wouldVerdict === "BLOCK" || s.wouldVerdict === "REQUIRE_APPROVAL") {
+      if (isBlocked) {
         await redis.hincrby(redisKey, "wouldHaveBlocked", 1);
       } else {
         await redis.hincrby(redisKey, "wouldHavePassed", 1);
@@ -99,4 +105,16 @@ export function getInMemoryShadowStats(policyId: string): {
 
 export function clearInMemoryShadowStats(): void {
   inMemoryShadowBuckets.clear();
+}
+
+export const clearShadowStore = clearInMemoryShadowStats;
+
+export function getShadowViolations(orgId: string): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const entry of inMemoryShadowBuckets.values()) {
+    if (entry.orgId === orgId) {
+      result[entry.policyId] = (result[entry.policyId] || 0) + entry.wouldHaveBlocked;
+    }
+  }
+  return result;
 }

@@ -13,6 +13,25 @@ jobs:
     name: Run Unit Tests & Build Verification
     runs-on: ubuntu-latest
 
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      REDIS_URL: redis://localhost:6379
+      PORT: 8080
+      UPSTREAM_BASE_URL: https://api.openai.com
+      INTERNAL_JWT_SECRET: test-jwt-secret-for-ci-32-chars-long!
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/x4g4t
+      RATE_LIMIT_MAX_REQUESTS: 100
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,7 +42,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "pnpm"
 
       - name: Install dependencies
@@ -39,7 +58,7 @@ jobs:
           pnpm --filter @x4g4t/proxy exec tsc --noEmit
           pnpm --filter @x4g4t/web exec tsc --noEmit
 
-      - name: Run automated test suites (166 tests)
+      - name: Run automated test suites (276 tests)
         run: |
           pnpm --filter @x4g4t/policy-engine test
           pnpm --filter @x4g4t/proxy test

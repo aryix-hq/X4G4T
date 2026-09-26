@@ -39,13 +39,18 @@ function getRedisClient(): Redis | null {
   return redisClient;
 }
 
-export const DEFAULT_RATE_LIMIT_POLICY: RateLimitPolicyConfig = {
-  id: "pol_default_rate_limit",
-  name: "Enterprise Sliding Window (10,000 req / 1 hour)",
-  windowSizeSeconds: 3600,
-  maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "10000", 10),
-  scope: "PER_USER"
-};
+export function getDefaultRateLimitPolicy(): RateLimitPolicyConfig {
+  const maxReq = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10);
+  return {
+    id: "pol_default_rate_limit",
+    name: `Enterprise Sliding Window (${maxReq} req / 1 hour)`,
+    windowSizeSeconds: 3600,
+    maxRequests: maxReq,
+    scope: "PER_USER"
+  };
+}
+
+export const DEFAULT_RATE_LIMIT_POLICY: RateLimitPolicyConfig = getDefaultRateLimitPolicy();
 
 const rateLimitPluginCallback: FastifyPluginAsync = async (fastify) => {
   fastify.decorate(
@@ -65,7 +70,7 @@ const rateLimitPluginCallback: FastifyPluginAsync = async (fastify) => {
         };
       }
 
-      const policy = customPolicy || DEFAULT_RATE_LIMIT_POLICY;
+      const policy = customPolicy || getDefaultRateLimitPolicy();
       const orgId = request.orgId || "org_default";
       const userId = request.userId || request.keyId || "anonymous";
       const ip = request.ip || (request.headers["x-forwarded-for"] as string) || "127.0.0.1";

@@ -7,6 +7,8 @@ export const RuleOperatorSchema = z.enum([
   "LESS_THAN",
   "GREATER_THAN_OR_EQUAL",
   "LESS_THAN_OR_EQUAL",
+  "GTE",
+  "LTE",
   "CONTAINS",
   "REGEX",
   "IN"
@@ -40,6 +42,7 @@ export interface CompiledPolicy {
   targetTool: string; // Tool name, e.g. "issue_refund" or "*"
   actionOnMatch: PolicyAction;
   mode?: PolicyMode;
+  matchLogic?: "AND" | "OR";
   rules: CompiledRule[];
 }
 
@@ -84,4 +87,3 @@ export interface LogRecordToHash {
   verdict: string;
   createdAt: string | Date;
 }
-

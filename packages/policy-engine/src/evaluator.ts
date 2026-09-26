@@ -4,7 +4,8 @@ import {
   CompiledPolicy,
   EvaluationContext,
   EvaluationResult,
-  LogRecordToHash
+  LogRecordToHash,
+  ShadowEvaluation
 } from "./types.js";
 
 export function evaluateAgentExecution(
@@ -16,12 +17,7 @@ export function evaluateAgentExecution(
   let matchedBlockResult: EvaluationResult | null = null;
   let matchedApprovalResult: EvaluationResult | null = null;
   let matchedAllowResult: EvaluationResult | null = null;
-  const shadowResults: Array<{
-    policyId: string;
-    policyName: string;
-    wouldVerdict: "ALLOW" | "BLOCK" | "REQUIRE_APPROVAL";
-    reason?: string;
-  }> = [];
+  const shadowResults: ShadowEvaluation[] = [];
 
   for (const policy of policies) {
     // Skip disabled policies
@@ -34,66 +30,81 @@ export function evaluateAgentExecution(
       continue;
     }
 
-    // Skip policies without explicit rules
-    if (policy.rules.length === 0) {
-      continue;
-    }
-
-    // Evaluate all rules in policy with AND semantics
-    let allRulesMatched = true;
+    // Evaluate rules according to matchLogic (AND vs OR)
+    const isOr = policy.matchLogic === "OR";
+    let policyMatched = policy.rules.length > 0 && !isOr;
     let lastMatchedRuleId: string | undefined;
 
-    for (const rule of policy.rules) {
-      const candidatePaths = rule.fieldPath.split(",").map((p) => p.trim()).filter(Boolean);
-      let isMatch = false;
+    if (policy.rules.length === 0) {
+      policyMatched = false;
+    } else {
+      for (const rule of policy.rules) {
+        const candidatePaths = rule.fieldPath.split(",").map((p) => p.trim()).filter(Boolean);
+        let isMatch = false;
 
-      const getValueForPath = (path: string): unknown => {
-        if (path.startsWith("iam.") && context.iam) {
-          return extractFieldValue(context.iam as unknown as Record<string, unknown>, path.replace(/^iam\./, ""));
-        } else if (path.startsWith("_iam.") && context.iam) {
-          return extractFieldValue(context.iam as unknown as Record<string, unknown>, path.replace(/^_iam\./, ""));
-        } else if (path.startsWith("network.") && context.network) {
-          return extractFieldValue(context.network as unknown as Record<string, unknown>, path.replace(/^network\./, ""));
-        } else if (path.startsWith("_network.") && context.network) {
-          return extractFieldValue(context.network as unknown as Record<string, unknown>, path.replace(/^_network\./, ""));
-        } else {
-          return extractFieldValue(context.arguments, path);
+        const getValueForPath = (path: string): unknown => {
+          if (path.startsWith("iam.") && context.iam) {
+            return extractFieldValue(context.iam as unknown as Record<string, unknown>, path.replace(/^iam\./, ""));
+          } else if (path.startsWith("_iam.") && context.iam) {
+            return extractFieldValue(context.iam as unknown as Record<string, unknown>, path.replace(/^_iam\./, ""));
+          } else if (path.startsWith("network.") && context.network) {
+            return extractFieldValue(context.network as unknown as Record<string, unknown>, path.replace(/^network\./, ""));
+          } else if (path.startsWith("_network.") && context.network) {
+            return extractFieldValue(context.network as unknown as Record<string, unknown>, path.replace(/^_network\./, ""));
+          } else {
+            return extractFieldValue(context.arguments, path);
+          }
+        };
+
+        for (const singlePath of candidatePaths) {
+          const val = getValueForPath(singlePath);
+          if (val !== undefined && val !== null) {
+            if (evaluateOperator(val, rule.operator, rule.targetValue)) {
+              isMatch = true;
+              break;
+            }
+          }
         }
-      };
 
-      for (const singlePath of candidatePaths) {
-        const val = getValueForPath(singlePath);
-        if (val !== undefined && val !== null) {
-          if (evaluateOperator(val, rule.operator, rule.targetValue)) {
-            isMatch = true;
+        // Fallback for single/empty paths or unary operators on undefined values
+        if (!isMatch && candidatePaths.length > 0) {
+          const firstVal = getValueForPath(candidatePaths[0]!);
+          isMatch = evaluateOperator(firstVal, rule.operator, rule.targetValue);
+        }
+
+        if (isMatch) {
+          lastMatchedRuleId = rule.id;
+          if (isOr) {
+            policyMatched = true;
+            break;
+          }
+        } else {
+          if (!isOr) {
+            policyMatched = false;
             break;
           }
         }
       }
-
-      // Fallback for single/empty paths or unary operators on undefined values
-      if (!isMatch && candidatePaths.length > 0) {
-        const firstVal = getValueForPath(candidatePaths[0]!);
-        isMatch = evaluateOperator(firstVal, rule.operator, rule.targetValue);
-      }
-
-      if (!isMatch) {
-        allRulesMatched = false;
-        break;
-      }
-      lastMatchedRuleId = rule.id;
     }
 
     // Record matched policy following action precedence (BLOCK > REQUIRE_APPROVAL > ALLOW)
-    if (allRulesMatched) {
+    if (policyMatched) {
       const latencyMs = Math.max(0, Math.round(performance.now() - startTime));
 
       // If policy is in SHADOW_LEARN mode, record counterfactual evaluation without blocking
       if (policy.mode === "SHADOW_LEARN") {
+        const projectedVerdict = policy.actionOnMatch === "BLOCK"
+          ? "SHADOW_BLOCKED"
+          : policy.actionOnMatch === "REQUIRE_APPROVAL"
+          ? "SHADOW_REQUIRE_APPROVAL"
+          : "SHADOW_ALLOWED";
+
         shadowResults.push({
           policyId: policy.id,
           policyName: policy.name,
           wouldVerdict: policy.actionOnMatch,
+          projectedVerdict,
+          violatingRuleId: lastMatchedRuleId,
           reason: `[SHADOW_LEARN] Candidate policy '${policy.name}' evaluated to ${policy.actionOnMatch}`
         });
         continue;

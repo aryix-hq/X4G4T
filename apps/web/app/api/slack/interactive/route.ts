@@ -86,6 +86,14 @@ export async function POST(req: NextRequest) {
     if (contentType.includes("application/json")) {
       const jsonBody = JSON.parse(rawBody);
       rawPayload = typeof jsonBody.payload === "string" ? jsonBody.payload : JSON.stringify(jsonBody);
+    } else if (contentType.includes("multipart/form-data")) {
+      const match = rawBody.match(/name="payload"\r?\n\r?\n([\s\S]*?)(?:\r?\n--|$)/);
+      if (match) {
+        rawPayload = match[1]!.trim();
+      } else {
+        const searchParams = new URLSearchParams(rawBody);
+        rawPayload = searchParams.get("payload");
+      }
     } else {
       const searchParams = new URLSearchParams(rawBody);
       rawPayload = searchParams.get("payload");

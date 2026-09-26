@@ -55,6 +55,10 @@ export function getDbClient() {
   return dbInstance;
 }
 
+export function setDbClient(mockDb: any): void {
+  dbInstance = mockDb;
+}
+
 export function setMockPoliciesForOrg(orgId: string, customPolicies: CompiledPolicy[]) {
   policyCache.set(orgId, {
     expiresAt: Date.now() + CACHE_TTL_MS * 10,
@@ -359,5 +363,68 @@ export async function forwardDownstreamStreaming(
   } finally {
     callbacks.onComplete?.(tokenCount);
   }
+}
+
+export interface ActiveStreamSession {
+  streamId: string;
+  orgId: string;
+  controller: AbortController;
+  startedAt: number;
+}
+
+const activeStreams = new Map<string, ActiveStreamSession>();
+
+export function registerActiveStream(
+  streamId: string,
+  orgId: string,
+  controller: AbortController
+): ActiveStreamSession {
+  const session: ActiveStreamSession = {
+    streamId,
+    orgId,
+    controller,
+    startedAt: Date.now()
+  };
+  activeStreams.set(streamId, session);
+  return session;
+}
+
+export function unregisterActiveStream(streamId: string): void {
+  activeStreams.delete(streamId);
+}
+
+export function getActiveStreamCount(orgId?: string): number {
+  if (!orgId) return activeStreams.size;
+  let count = 0;
+  for (const session of activeStreams.values()) {
+    if (session.orgId === orgId) count++;
+  }
+  return count;
+}
+
+export function severAllActiveStreams(
+  reason: string,
+  orgId?: string
+): { severedCount: number; durationMs: number } {
+  const start = performance.now();
+  let severedCount = 0;
+  const toDelete: string[] = [];
+
+  for (const [streamId, session] of activeStreams.entries()) {
+    if (!orgId || session.orgId === orgId) {
+      try {
+        session.controller.abort(new Error(reason));
+      } catch {}
+      toDelete.push(streamId);
+      severedCount++;
+    }
+  }
+
+  for (const id of toDelete) {
+    activeStreams.delete(id);
+  }
+
+  const durationMs = Math.max(0, Math.round(performance.now() - start));
+  return { severedCount, durationMs };
 }
 

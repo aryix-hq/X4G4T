@@ -1,6 +1,6 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import { createHash } from "node:crypto";
+import crypto, { createHash } from "node:crypto";
 import { apiKeys } from "@x4g4t/db";
 import { eq, and, isNull } from "drizzle-orm";
 import { getDbClient } from "../services/gateway.js";
@@ -170,7 +170,8 @@ const authPluginCallback: FastifyPluginAsync = async (fastify) => {
         const [keyRecord] = await db
           .select({
             id: apiKeys.id,
-            orgId: apiKeys.orgId
+            orgId: apiKeys.orgId,
+            keyHash: apiKeys.keyHash
           })
           .from(apiKeys)
           .where(
@@ -182,6 +183,17 @@ const authPluginCallback: FastifyPluginAsync = async (fastify) => {
           .limit(1);
 
         if (!keyRecord) {
+          return reply.status(401).send({
+            error: {
+              code: "INVALID_API_KEY",
+              message: "Provided API Key is invalid or revoked."
+            }
+          });
+        }
+
+        const bufExpected = Buffer.from(keyRecord.keyHash || tokenHash, "hex");
+        const bufActual = Buffer.from(tokenHash, "hex");
+        if (bufExpected.length !== bufActual.length || !crypto.timingSafeEqual(bufExpected, bufActual)) {
           return reply.status(401).send({
             error: {
               code: "INVALID_API_KEY",

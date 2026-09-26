@@ -79,6 +79,30 @@ export function calculatePercentile(sorted: number[], p: number): number {
   return lowerVal + weight * (upperVal - lowerVal);
 }
 
+export function calculateDistribution(values: number[]): {
+  count: number;
+  min: number;
+  max: number;
+  median: number;
+  p90: number;
+  p95: number;
+  p99: number;
+} {
+  if (values.length === 0) {
+    return { count: 0, min: 0, max: 0, median: 0, p90: 0, p95: 0, p99: 0 };
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  return {
+    count: sorted.length,
+    min: sorted[0]!,
+    max: sorted[sorted.length - 1]!,
+    median: calculatePercentile(sorted, 50),
+    p90: calculatePercentile(sorted, 90),
+    p95: calculatePercentile(sorted, 95),
+    p99: calculatePercentile(sorted, 99)
+  };
+}
+
 /**
  * Calculates mean and standard deviation.
  */
@@ -90,9 +114,58 @@ export function calculateStats(values: number[]): { mean: number; stdDev: number
   return { mean, stdDev: Math.sqrt(variance) };
 }
 
+export interface MinedPolicyRecommendation {
+  targetTool: string;
+  field: string;
+  fieldPath: string;
+  suggestedThreshold: number;
+  confidenceScore: number;
+  sampleSize: number;
+  reasoning: string;
+}
+
+export function minePolicyRecommendations(
+  dataset: Array<{ toolName: string; field: string; value: unknown }>,
+  options?: { minSampleSize?: number }
+): MinedPolicyRecommendation[] {
+  const minSampleSize = options?.minSampleSize ?? 50;
+  if (dataset.length < minSampleSize) {
+    return [];
+  }
+
+  const grouped = new Map<string, number[]>();
+  for (const item of dataset) {
+    if (typeof item.value === "number" && !isNaN(item.value)) {
+      const key = `${item.toolName}::${item.field}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(item.value);
+    }
+  }
+
+  const results: MinedPolicyRecommendation[] = [];
+  for (const [key, numbers] of grouped.entries()) {
+    if (numbers.length < minSampleSize) continue;
+    const [toolName, field] = key.split("::");
+    const dist = calculateDistribution(numbers);
+    const threshold = Math.round(dist.p99 * 100) / 100;
+    results.push({
+      targetTool: toolName!,
+      field: field!,
+      fieldPath: field!,
+      suggestedThreshold: threshold,
+      confidenceScore: 0.95,
+      sampleSize: numbers.length,
+      reasoning: `Observed ${numbers.length} calls for tool '${toolName}' with median ${dist.median} and p99 ${dist.p99}. Proposing upper bound threshold ${threshold}.`
+    });
+  }
+
+  return results;
+}
+
 /**
  * Core log-mining and ML anomaly detection algorithm.
  * Scans past execution logs, aggregates distributions, and generates recommendations.
+
  */
 export async function runMlMinerAnalysis(orgId: string = "org_demo_default"): Promise<DiscoveredRecommendation[]> {
   const numericValuesByToolField = new Map<string, number[]>();

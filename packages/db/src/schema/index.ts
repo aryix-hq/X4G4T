@@ -30,6 +30,8 @@ export const ruleOperatorEnum = pgEnum("rule_operator", [
   "LESS_THAN",
   "GREATER_THAN_OR_EQUAL",
   "LESS_THAN_OR_EQUAL",
+  "GTE",
+  "LTE",
   "CONTAINS",
   "REGEX",
   "IN",

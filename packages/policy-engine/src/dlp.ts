@@ -5,6 +5,7 @@ export type DlpViolationType =
   | "GITHUB_TOKEN"
   | "PRIVATE_KEY"
   | "API_KEY"
+  | "HIGH_ENTROPY_SECRET"
   | "CREDIT_CARD"
   | "SSN"
   | "AADHAAR"
@@ -75,14 +76,45 @@ export function validateLuhn(numStr: string): boolean {
 }
 
 /**
- * Normalizes input strings using Unicode NFKC normalization and strips zero-width/hidden
- * characters (U+200B to U+200D, U+FEFF, U+2060, U+180E) to neutralize DLP evasion attempts.
+ * Calculates Shannon entropy of a string to detect high-entropy tokens (private keys, hashes).
+ */
+export function calculateShannonEntropy(str: string): number {
+  if (!str || str.length === 0) return 0;
+  const frequencies = new Map<string, number>();
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]!;
+    frequencies.set(char, (frequencies.get(char) || 0) + 1);
+  }
+
+  let entropy = 0;
+  const len = str.length;
+  for (const count of frequencies.values()) {
+    const p = count / len;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
+}
+
+/**
+ * Normalizes input strings using Unicode NFKC normalization, URL/percent-decoding,
+ * and strips zero-width/hidden characters to neutralize DLP evasion attempts.
  */
 export function normalizeDlpInput(text: string): string {
   if (!text || typeof text !== "string") return "";
-  return text
+  let normalized = text
     .normalize("NFKC")
     .replace(/[\u200B-\u200D\uFEFF\u2060\u180E]/g, "");
+
+  if (normalized.includes("%")) {
+    try {
+      const decoded = decodeURIComponent(normalized);
+      normalized = decoded
+        .normalize("NFKC")
+        .replace(/[\u200B-\u200D\uFEFF\u2060\u180E]/g, "");
+    } catch {}
+  }
+
+  return normalized;
 }
 
 /**
@@ -119,6 +151,22 @@ export function inspectStringDlp(
     result = result.replace(API_KEY_PREFIX_REGEX, (match) => {
       violations.push({ type: "API_KEY", snippet: match.slice(0, 8) + "...", field: fieldName });
       return config.action === "REDACT" ? "[REDACTED_SECRET:API_KEY]" : match;
+    });
+
+    // High-Entropy Secret Detection (Hex & Base64 keys without known prefixes)
+    const HIGH_ENTROPY_CANDIDATE_REGEX = /(?:^|(?<=[\s"'\''`:=]))([A-Za-z0-9_\-+/=]{32,128})(?=$|[\s"'\''`,.;])/g;
+    result = result.replace(HIGH_ENTROPY_CANDIDATE_REGEX, (match, token) => {
+      if (token.startsWith("[REDACTED_") || token.endsWith("]")) return match;
+      if (calculateShannonEntropy(token) >= 3.5) {
+        violations.push({
+          type: "HIGH_ENTROPY_SECRET",
+          snippet: token.slice(0, 8) + "...",
+          field: fieldName
+        });
+        const replacement = config.action === "REDACT" ? "[REDACTED_SECRET:HIGH_ENTROPY]" : token;
+        return match.replace(token, replacement);
+      }
+      return match;
     });
   }
 
@@ -232,3 +280,75 @@ export function inspectPayloadDlp(
     reason
   };
 }
+
+/**
+ * Sliding window stream buffer for chunked SSE telemetry data.
+ * Maintains an internal overlap window across chunk boundaries to detect split tokens.
+ */
+export class DlpStreamBuffer {
+  private config: DlpPolicyConfig;
+  private buffer: string = "";
+  private violations: DlpViolation[] = [];
+  private blocked: boolean = false;
+  private readonly windowOverlapSize: number;
+
+  constructor(config: DlpPolicyConfig, windowOverlapSize: number = 64) {
+    this.config = config;
+    this.windowOverlapSize = windowOverlapSize;
+  }
+
+  public processChunk(chunk: string): string {
+    if (this.blocked) return "";
+
+    this.buffer += chunk;
+    const { sanitizedText, violations } = inspectStringDlp(this.buffer, this.config);
+
+    if (violations.length > 0) {
+      this.violations.push(...violations);
+      if (this.config.action === "BLOCK") {
+        this.blocked = true;
+        this.buffer = "";
+        return "";
+      }
+    }
+
+    if (sanitizedText.length > this.windowOverlapSize) {
+      const emitLength = sanitizedText.length - this.windowOverlapSize;
+      const toEmit = sanitizedText.slice(0, emitLength);
+      this.buffer = sanitizedText.slice(emitLength);
+      return toEmit;
+    } else {
+      this.buffer = sanitizedText;
+      return "";
+    }
+  }
+
+  public flush(): string {
+    if (this.blocked) return "";
+    const { sanitizedText, violations } = inspectStringDlp(this.buffer, this.config);
+    if (violations.length > 0) {
+      this.violations.push(...violations);
+      if (this.config.action === "BLOCK") {
+        this.blocked = true;
+        this.buffer = "";
+        return "";
+      }
+    }
+    const remaining = sanitizedText;
+    this.buffer = "";
+    return remaining;
+  }
+
+  public isBlocked(): boolean {
+    return this.blocked;
+  }
+
+  public hasViolations(): boolean {
+    return this.violations.length > 0;
+  }
+
+  public getViolations(): DlpViolation[] {
+    return this.violations;
+  }
+}
+
