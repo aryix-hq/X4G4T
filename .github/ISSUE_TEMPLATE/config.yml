@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Disclosure
+    url: https://github.com/aryix-hq/X4G4T/security/advisories/new
+    about: Please report security vulnerabilities privately rather than via public issues.
+  - name: Questions & Community Discussions
+    url: https://github.com/aryix-hq/X4G4T/discussions
+    about: Ask questions, share ideas, and discuss policy configurations.

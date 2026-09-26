@@ -16,10 +16,24 @@ const DEFAULT_BLOCKED_HOSTNAMES = new Set([
   "169.254.169.254", // AWS, GCP, Azure, OpenStack link-local metadata
   "169.254.170.2",   // AWS ECS task metadata
   "192.0.0.192",     // Oracle Cloud metadata
+  "fd00:ec2::254",   // AWS IPv6 IMDS
   "metadata.google.internal",
   "metadata",
-  "instance-data"
+  "instance-data",
+  "kubernetes.default",
+  "kubernetes.default.svc",
+  "kubernetes.default.svc.cluster.local"
 ]);
+
+const WILDCARD_DNS_SERVICES = [
+  "nip.io",
+  "sslip.io",
+  "xip.io",
+  "traefik.me",
+  "localtest.me",
+  "lvh.me",
+  "vcap.me"
+];
 
 /**
  * Checks whether an IPv4 address belongs to a private / link-local / loopback subnet.
@@ -57,13 +71,71 @@ function isPrivateOrReservedIpv4(ip: string): boolean {
 }
 
 /**
+ * Extracts IPv4 address from an IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1 or ::ffff:7f00:1)
+ */
+function extractIpv4FromIpv6(ipv6: string): string | null {
+  const lower = ipv6.toLowerCase().trim();
+  let suffix: string | null = null;
+  if (lower.startsWith("::ffff:")) {
+    suffix = lower.slice("::ffff:".length);
+  } else if (lower.startsWith("0:0:0:0:0:ffff:")) {
+    suffix = lower.slice("0:0:0:0:0:ffff:".length);
+  }
+
+  if (!suffix) return null;
+  if (suffix.includes(".")) return suffix;
+
+  const hexParts = suffix.split(":");
+  if (hexParts.length === 2 && hexParts[0] !== undefined && hexParts[1] !== undefined) {
+    const high = parseInt(hexParts[0], 16);
+    const low = parseInt(hexParts[1], 16);
+    if (!isNaN(high) && !isNaN(low)) {
+      const b1 = (high >> 8) & 0xff;
+      const b2 = high & 0xff;
+      const b3 = (low >> 8) & 0xff;
+      const b4 = low & 0xff;
+      return `${b1}.${b2}.${b3}.${b4}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Checks whether an IPv6 address is loopback, link-local, or private.
  */
 function isPrivateOrReservedIpv6(ip: string): boolean {
   const cleanIp = ip.toLowerCase().trim();
   if (cleanIp === "::1" || cleanIp === "::") return true;
   if (cleanIp.startsWith("fe80:") || cleanIp.startsWith("fc00:") || cleanIp.startsWith("fd00:")) return true;
+
+  // Check IPv4-mapped IPv6
+  const mappedIpv4 = extractIpv4FromIpv6(cleanIp);
+  if (mappedIpv4) {
+    if (DEFAULT_BLOCKED_HOSTNAMES.has(mappedIpv4) || isPrivateOrReservedIpv4(mappedIpv4)) {
+      return true;
+    }
+  }
+
   return false;
+}
+
+/**
+ * Extracts and inspects embedded IPs from wildcard DNS services (e.g., 127.0.0.1.nip.io or 10-0-0-1.sslip.io).
+ */
+function inspectWildcardDns(hostname: string): { isWildcard: boolean; embeddedIp?: string } {
+  const isWildcard = WILDCARD_DNS_SERVICES.some((svc) => hostname === svc || hostname.endsWith(`.${svc}`));
+  if (!isWildcard) {
+    return { isWildcard: false };
+  }
+
+  // Attempt to extract embedded IPv4 pattern (e.g. 127.0.0.1 or 127-0-0-1)
+  const match = hostname.match(/(\d{1,3}[\.-]\d{1,3}[\.-]\d{1,3}[\.-]\d{1,3})/);
+  if (match && match[1]) {
+    const ip = match[1].replace(/-/g, ".");
+    return { isWildcard: true, embeddedIp: ip };
+  }
+
+  return { isWildcard: true };
 }
 
 /**
@@ -98,9 +170,15 @@ export function validateDownstreamUrl(
 
   const rawHostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ""); // Strip IPv6 brackets
 
-  // 2. Block known cloud metadata hostnames
+  // 2. Block known cloud metadata hostnames (IPv4 or IPv6 IMDS)
   if (DEFAULT_BLOCKED_HOSTNAMES.has(rawHostname)) {
     return { valid: false, reason: `Access to cloud metadata service '${rawHostname}' is strictly blocked.` };
+  }
+
+  // Check IPv4-mapped IPv6 metadata bypass
+  const mappedIpv4 = extractIpv4FromIpv6(rawHostname);
+  if (mappedIpv4 && DEFAULT_BLOCKED_HOSTNAMES.has(mappedIpv4)) {
+    return { valid: false, reason: `Access to cloud metadata service '${rawHostname}' (IPv4-mapped) is strictly blocked.` };
   }
 
   // 3. Custom blocked hostnames
@@ -119,12 +197,45 @@ export function validateDownstreamUrl(
   }
 
   // 5. Loopback & Localhost check
-  const isLoopback = rawHostname === "localhost" || rawHostname.endsWith(".localhost");
+  const isLoopback =
+    rawHostname === "localhost" ||
+    rawHostname.endsWith(".localhost") ||
+    rawHostname.endsWith(".localtest.me") ||
+    rawHostname.endsWith(".lvh.me") ||
+    rawHostname.endsWith(".vcap.me");
   if (isLoopback && !options.allowLocal) {
     return { valid: false, reason: `Access to loopback hostname '${rawHostname}' is blocked.` };
   }
 
-  // 6. IP address checks
+  // 6. Wildcard DNS Rebinding check
+  const wildcardCheck = inspectWildcardDns(rawHostname);
+  if (wildcardCheck.isWildcard) {
+    if (wildcardCheck.embeddedIp) {
+      if (
+        DEFAULT_BLOCKED_HOSTNAMES.has(wildcardCheck.embeddedIp) ||
+        isPrivateOrReservedIpv4(wildcardCheck.embeddedIp)
+      ) {
+        if (!options.allowLocal) {
+          return {
+            valid: false,
+            reason: `Wildcard DNS resolving to private IP or metadata '${wildcardCheck.embeddedIp}' is blocked.`
+          };
+        }
+      }
+    } else if (!options.allowLocal) {
+      return {
+        valid: false,
+        reason: `Wildcard DNS service domain '${rawHostname}' is blocked to prevent DNS rebinding.`
+      };
+    }
+  }
+
+  // 7. Kubernetes internal service check
+  if (rawHostname.endsWith(".svc.cluster.local") && !options.allowLocal) {
+    return { valid: false, reason: `Access to internal Kubernetes service '${rawHostname}' is blocked.` };
+  }
+
+  // 8. IP address checks
   const ipType = isIP(rawHostname);
   if (ipType === 4) {
     if (isPrivateOrReservedIpv4(rawHostname) && !options.allowLocal) {
@@ -138,4 +249,3 @@ export function validateDownstreamUrl(
 
   return { valid: true };
 }
-

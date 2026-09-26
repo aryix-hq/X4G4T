@@ -8,7 +8,7 @@ We welcome contributions from developers, security engineers, SecOps practitione
 
 ## 1. Code of Conduct
 
-We are committed to providing a welcoming, inclusive, and harassment-free environment for all contributors. Please treat fellow maintainers and contributors with respect, empathy, and constructive feedback.
+We are committed to providing a welcoming, inclusive, and harassment-free environment for all contributors. Please review our [Code of Conduct](CODE_OF_CONDUCT.md) for details on expected behavior and reporting guidelines.
 
 ---
 
@@ -35,8 +35,8 @@ X4G4T/
 
 ### 3.1 Prerequisites
 - **Node.js**: `v20.x` or higher
-- **Package Manager**: `pnpm v9.x` (`corepack enable && corepack prepare pnpm@9.0.0 --activate`)
-- **Container Runtime**: Docker Desktop 24+ & Docker Compose v2.20+
+- **Package Manager**: `pnpm v12.4.2` (`corepack enable && corepack prepare pnpm@12.4.2 --activate`)
+- **Container Runtime**: Docker Desktop 24+ & Docker Compose v2.20+ (optional for Minimal Dev Mode)
 
 ### 3.2 Clone & Install
 ```bash
@@ -107,11 +107,28 @@ Please use [Conventional Commits](https://www.conventionalcommits.org/) for git 
 - `test(dlp): add Luhn checksum test vectors for Amex credit cards`
 - `docs(grafana): update dashboard panel layout documentation`
 
-### 5.3 Checklist Before Submitting PR
+### 5.3 Contribution Scope: Good First Contributions vs. Maintainer Review
+
+To help contributors navigate the codebase efficiently and avoid scope mismatches:
+
+| Area | Review Path | Requirements / Scope |
+| :--- | :--- | :--- |
+| **AST Operators & Condition Rules** | 🟢 Good First Contribution | Pure functions inside `packages/policy-engine/src/evaluator.ts`. Must be deterministic and accompanied by Vitest test vectors. |
+| **DLP Patterns & Data Detectors** | 🟢 Good First Contribution | Regular expressions / Luhn validation inside `packages/policy-engine/src/dlp.ts`. Must include positive/negative test cases and synthetic PII vectors. |
+| **Observability & Dashboards** | 🟢 Good First Contribution | Grafana JSON dashboards (`docker/grafana/`), Prometheus alerting rules, or telemetry documentation. |
+| **Documentation & Guides** | 🟢 Good First Contribution | Architecture clarifications, API documentation, local onboarding tutorials. |
+| **Authentication & RBAC** | 🔴 Maintainer & Security Review | `apps/proxy/src/plugins/auth.ts`, session verification, role escalation checks. Requires dual-maintainer sign-off. |
+| **Credential Injection & Keystores** | 🔴 Maintainer & Security Review | Upstream token rewriting, Vault/AWS Secrets Manager connectors. Zero leak guarantee required. |
+| **SSRF Defense & Network Guards** | 🔴 Maintainer & Security Review | `packages/policy-engine/src/ssrf.ts`, IP parsing, DNS rebinding mitigations. Adversarial test cases required. |
+| **Audit Chaining & Merkle Trees** | 🔴 Maintainer & Security Review | Cryptographic tamper-proofing and event streaming integrity. |
+
+### 5.4 Checklist Before Submitting PR
 - [ ] `pnpm build` compiles successfully with zero TypeScript errors.
 - [ ] `pnpm test` runs with 100% passing tests.
+- [ ] No secrets, live tokens, corporate identifiers, or sensitive credentials in git diff.
 - [ ] New policy engine functions have deterministic, pure unit test coverage.
 - [ ] Any new Prometheus metrics are documented in [`docs/OBSERVABILITY_GRAFANA_PROVISIONING.md`](docs/OBSERVABILITY_GRAFANA_PROVISIONING.md).
+- [ ] If touching security-sensitive code (auth, SSRF, DLP, proxying), fail-closed invariant tests are included.
 
 ---
 

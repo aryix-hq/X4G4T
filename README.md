@@ -66,56 +66,92 @@ Autonomous AI coding agents (Claude Code, Cursor, Windsurf, Devin), agentic fram
 
 ## 🏛️ Architecture & Visual Flow
 
+### Canonical Request Lifecycle
+
 ```
-                                ┌────────────────────────────────────────────────────────┐
-                                │          X4G4T CENTRALIZED GATEWAY (:4000)          │
-     Autonomous AI Agents       │                                                        │       Downstream Targets
-   ┌─────────────────────────┐  │  ┌──────────────────────────────────────────────────┐  │     ┌───────────────────┐
-   │ Cursor / Claude Code    │  │  │ 1. Upstream LLM Key Vault & Egress Injection     │  │ ──► │ OpenAI / Anthropic│
-   │ Windsurf / Cline / Roo  │  │  │    (Agents use local keys; gateway injects real) │  │     │ Google Gemini     │
-   └────────────┬────────────┘  │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
-                │               │  │ 2. Sub-Millisecond AST Evaluator (<0.2ms)        │  │
-   ┌────────────┴────────────┐  │  │    - Numerical bounds, regex, enum operators     │  │     ┌───────────────────┐
-   │ LangChain / AutoGen     │ ─┼─►│    - IAM role/group permissions enforcement      │  │ ──► │ Stripe / Payments │
-   └────────────┬────────────┘  │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
-                │               │  │ 3. Enterprise DLP & SSRF Guards                  │  │
-   ┌────────────┴────────────┐  │  │    - Luhn CC, SSN, Aadhaar, AWS key scrub        │  │     ┌───────────────────┐
-   │ MCP Clients             │  │  │    - Cloud metadata (169.254.169.254) blocked    │  │ ──► │ PostgreSQL / SQL  │
-   │ (JSON-RPC tools/call)   │  │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
-   └─────────────────────────┘  │  │ 4. Tamper-Evident Daily Audit Logging            │  │
-                                │  │    - Fire-and-forget Graylog/ES indexing         │  │     ┌───────────────────┐
-                                │  │    - Real-time Prometheus metrics exposition     │  │ ──► │ AWS / Kubernetes  │
-                                │  └────────────────────────┬─────────────────────────┘  │     └───────────────────┘
-                                └───────────────────────────┼────────────────────────────┘
-                                                            │
-                                                            ▼ (On REQUIRE_APPROVAL)
-                                                   ┌─────────────────┐
-                                                   │ Slack / Email   │
-                                                   │ HITL Sign-off   │
-                                                   └─────────────────┘
+                             CANONICAL REQUEST LIFECYCLE
+                             
+  [Autonomous AI Agent / Tool Call]
+                 │
+                 ▼
+  ┌──────────────────────────────┐
+  │ 1. INGRESS & TLS             │  Fastify Gateway (:4000)
+  └──────────────┬───────────────┘
+                 │
+                 ▼
+  ┌──────────────────────────────┐
+  │ 2. AUTHENTICATION            │  OIDC JWT / SHA-256 API Key / Reverse Auth (Subnet / mTLS)
+  │    & IDENTITY VERIFICATION   │  Token Cache (<0.05ms) | Gated Demo Tokens (X4G4T_DEV_MODE)
+  └──────────────┬───────────────┘
+                 │
+                 ▼
+  ┌──────────────────────────────┐
+  │ 3. EMERGENCY KILL-SWITCH     │  Global Redis / In-Memory Atomic Circuit Breaker
+  │    (0.00ms HALT)             │  If ACTIVE ──► [403 FORBIDDEN: EMERGENCY_LOCKDOWN_ACTIVE]
+  └──────────────┬───────────────┘
+                 │
+                 ▼
+  ┌──────────────────────────────┐
+  │ 4. AST POLICY ENGINE         │  Deterministic In-Memory AST Evaluation (<0.2ms)
+  │    (Pure TypeScript Runtime) │  - Operators: EQUALS, REGEX, NUM_GT, NOT_IN, CIDR
+  └──────────────┬───────────────┘  - Action: ALLOW | DENY | REQUIRE_APPROVAL (HITL)
+                 │
+     ┌───────────┴────────────────────────┐
+     ▼ (DENY)                             ▼ (REQUIRE_APPROVAL)
+  [403 POLICY_VIOLATION]               [202 ACCEPTED (HOLD)] ──► Slack / Webhook
+     │
+     ▼ (ALLOW)
+  ┌──────────────────────────────┐
+  │ 5. DLP REDACTION & MASKING   │  In-flight Token Scrubbing (Credit Cards Luhn, SSN, API Keys)
+  │    (Zero-Allocation RegEx)   │  Masks payload in-place with [REDACTED_*]
+  └──────────────┬───────────────┘
+                 │
+                 ▼
+  ┌──────────────────────────────┐
+  │ 6. SSRF GUARD & BOUNDARY     │  Target URL Validation (Blocks 169.254.169.254, AWS IPv6 IMDS,
+  │    (Subnet & DNS Filtering)  │  RFC 1918 Private Subnets, Wildcard DNS *.nip.io / *.sslip.io)
+  └──────────────┬───────────────┘
+                 │
+                 ▼
+  ┌──────────────────────────────┐
+  │ 7. UPSTREAM PROXY &          │  Reverse Auth Credential Injection (Swaps dummy agent keys
+  │    CREDENTIAL INJECTION      │  with production master tokens at network perimeter)
+  └──────────────┬───────────────┘
+                 │
+                 ▼
+  ┌──────────────────────────────┐
+  │ 8. AUDIT CHAIN & METRICS     │  Fire-and-forget SHA-256 Tamper-Evident Chaining,
+  │    (Observability Pipeline)  │  Elasticsearch/OpenSearch log sink & Prometheus exposition
+  └──────────────┬───────────────┘
+                 │
+                 ▼
+  [Upstream LLM / Target Tool Response] ──► [Downstream Agent Return]
 ```
 
 ---
 
-## 🚀 3-Minute Quickstart
+## 🚀 Quickstart: Choose Your Deployment Tier
 
-X4G4T ships with a complete, production-grade **Turn-Key Docker Compose Stack** including PostgreSQL, Redis, Elasticsearch/Graylog, Prometheus, Grafana, Fastify Gateway, and Next.js Web UI.
+> [!WARNING]
+> **Development & Demo Credentials Notice:**
+> The demo tokens (`sec_live_x4g4t_demo`, `dummy-key`) and local service passwords (`admin/admin`, `postgres/postgres`) are configured strictly for local evaluation. In production mode (`NODE_ENV=production`), demo tokens are rejected unless `X4G4T_DEV_MODE=true` is explicitly set. Production deployments must use external secret stores (Vault, AWS Secrets Manager, or Kubernetes Secrets).
 
-### 1. Start the System
+### Tier 1: Minimal Dev Mode (< 30 Seconds, Zero Containers)
+Ideal for testing the pure policy engine, AST evaluators, and proxy routes without running Docker or background databases:
+
 ```bash
-# Clone the repository
+# 1. Clone repository
 git clone https://github.com/aryix-hq/X4G4T.git
 cd X4G4T
 
-# Start all services in detached mode
-docker compose up -d
+# 2. Install dependencies (requires pnpm v12.4.2)
+pnpm install
 
-# Verify health
-docker compose ps
+# 3. Start the proxy in development mode (in-memory fallbacks active)
+pnpm --filter @x4g4t/proxy dev
 ```
 
-### 2. Verify Your First Protected Request
-Run this `curl` command to test your new proxy firewall:
+Test your running proxy immediately:
 ```bash
 curl -X POST http://localhost:4000/v1/gateway/execute \
   -H "Authorization: Bearer sec_live_x4g4t_demo" \
@@ -128,17 +164,21 @@ curl -X POST http://localhost:4000/v1/gateway/execute \
     }
   }'
 ```
-Expected response:
-```json
-{
-  "verdict": "ALLOW",
-  "latencyMs": 0,
-  "toolName": "database_query",
-  "message": "Tool execution passed all active policy guardrails."
-}
+
+---
+
+### Tier 2: Full Enterprise Observability Stack (Docker Compose)
+Spins up the full platform: PostgreSQL, Redis, OpenSearch/Elasticsearch, Prometheus, Grafana, and Fastify Gateway:
+
+```bash
+# Start all services
+docker compose up -d
+
+# Verify service health
+docker compose ps
 ```
 
-### 3. Access Endpoints
+#### Access Endpoints
 | Component | Local URL | Default Credentials | Purpose |
 | :--- | :--- | :--- | :--- |
 | **X4G4T Web Control Plane** | [http://localhost:3000](http://localhost:3000) | Instant Sandbox Mode (or Clerk SSO) | Visual policy editor & live audit log |

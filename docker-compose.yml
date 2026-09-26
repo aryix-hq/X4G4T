@@ -1,3 +1,13 @@
+# ==============================================================================
+# X4G4T Local Development & Evaluation Stack
+# 
+# WARNING: This Docker Compose configuration is strictly intended for local
+# development and evaluation. Default credentials (e.g. postgres/postgres,
+# admin/admin) and anonymous Grafana access are enabled ONLY for instant onboarding.
+# For production deployments, deploy via Kubernetes Helm manifests (in /k8s)
+# with managed secrets (HashiCorp Vault, AWS Secrets Manager, or SealedSecrets).
+# ==============================================================================
+
 services:
   # --------------------------------------------------------------------------
   # 1. PostgreSQL 16: Tenancy, Keys, Policies, Logs & HITL Holds
@@ -9,9 +19,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: x4g4t
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-x4g4t}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro

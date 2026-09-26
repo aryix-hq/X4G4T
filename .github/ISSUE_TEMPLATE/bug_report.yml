@@ -1,0 +1,50 @@
+name: Bug Report
+description: File a bug report to help us improve X4G4T
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please ensure this is not a security vulnerability. If it is a security issue, report it privately per [SECURITY.md](https://github.com/aryix-hq/X4G4T/blob/main/SECURITY.md).
+  - type: input
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which part of the monorepo has the bug?
+      placeholder: e.g. apps/proxy, packages/policy-engine, apps/web, docker-compose
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps or minimal curl command to reproduce the issue.
+      placeholder: |
+        1. Start proxy with `pnpm --filter @x4g4t/proxy dev`
+        2. Execute POST to /v1/gateway/execute with payload...
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment Info
+      description: Node.js version, OS, pnpm version
+      placeholder: e.g. Node v20.14.0, macOS Sonoma / Ubuntu 22.04, pnpm 12.4.2
+    validations:
+      required: false

@@ -87,9 +87,21 @@ const authPluginCallback: FastifyPluginAsync = async (fastify) => {
       const isDummyToken = 
         token === "dummy-key" ||
         token === "dummy-developer-token" ||
+        token === "sec_live_x4g4t_demo" ||
+        token === "dev_admin" ||
         token.startsWith("sk-ant-dummy") ||
         token.startsWith("sk-dummy") ||
         token.includes("developer-session");
+
+      // In production environments, reject demo/dummy credentials unless X4G4T_DEV_MODE=true is set
+      if (isDummyToken && process.env.NODE_ENV === "production" && process.env.X4G4T_DEV_MODE !== "true") {
+        return reply.status(403).send({
+          error: {
+            code: "DEMO_CREDENTIALS_FORBIDDEN_IN_PRODUCTION",
+            message: "Dummy and demo credentials are forbidden in production environments. Set X4G4T_DEV_MODE=true if testing."
+          }
+        });
+      }
 
       // Reverse Authentication: Corporate Subnet, mTLS, or Developer Daemon Token
       const isReverseAuth = Boolean(

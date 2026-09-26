@@ -1,0 +1,24 @@
+# Gitleaks Configuration for X4G4T
+# Enforces defense-grade secret scanning while whitelisting synthetic test fixtures.
+
+[allowlist]
+description = "Global allowlist for test vectors, mock tokens, and documentation examples"
+paths = [
+  '''apps/proxy/test/.*''',
+  '''packages/policy-engine/test/.*''',
+  '''apps/web/.*test.*''',
+  '''docs/.*''',
+  '''\.env\.example''',
+  '''\.github/.*'''
+]
+regexes = [
+  '''sec_live_x4g4t_demo''',
+  '''sec_live_.*_test.*''',
+  '''dummy-key''',
+  '''dummy-developer-token''',
+  '''sk-ant-dummy.*''',
+  '''sk-dummy.*''',
+  '''test-jwt-secret.*''',
+  '''mock_signature_bytes''',
+  '''somepasswordpeppersecretatleast16characters'''
+]

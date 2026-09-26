@@ -216,5 +216,55 @@ describe("Enterprise IAM Multi-Provider Authentication", () => {
     expect(body.orgId).toBe("org_static_api_key_org");
     expect(body.keyId).toBe("key_static_1");
   });
+
+  it("strictly forbids demo and dummy credentials when NODE_ENV is production without X4G4T_DEV_MODE", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    const prevDevMode = process.env.X4G4T_DEV_MODE;
+    try {
+      process.env.NODE_ENV = "production";
+      delete process.env.X4G4T_DEV_MODE;
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/test/protected",
+        headers: { authorization: "Bearer dummy-key" }
+      });
+
+      expect(res.statusCode).toBe(403);
+      const body = JSON.parse(res.body);
+      expect(body.error.code).toBe("DEMO_CREDENTIALS_FORBIDDEN_IN_PRODUCTION");
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+      if (prevDevMode !== undefined) {
+        process.env.X4G4T_DEV_MODE = prevDevMode;
+      }
+    }
+  });
+
+  it("permits dummy credentials in production when X4G4T_DEV_MODE=true is explicitly set", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    const prevDevMode = process.env.X4G4T_DEV_MODE;
+    try {
+      process.env.NODE_ENV = "production";
+      process.env.X4G4T_DEV_MODE = "true";
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/test/protected",
+        headers: { authorization: "Bearer dummy-key" }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.status).toBe("OK");
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+      if (prevDevMode !== undefined) {
+        process.env.X4G4T_DEV_MODE = prevDevMode;
+      } else {
+        delete process.env.X4G4T_DEV_MODE;
+      }
+    }
+  });
 });
 
