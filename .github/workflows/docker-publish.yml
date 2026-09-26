@@ -41,7 +41,7 @@ jobs:
       # ------------------------------------------------------------------------
       - name: Extract metadata for Proxy Gateway
         id: meta-proxy
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/x4g4t-proxy
           tags: |
@@ -67,7 +67,7 @@ jobs:
       # ------------------------------------------------------------------------
       - name: Extract metadata for Web Control Plane
         id: meta-web
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/x4g4t-web
           tags: |
