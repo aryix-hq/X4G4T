@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertOctagon, ShieldCheck, Zap, RefreshCw, UserCheck, Lock, Unlock } from "lucide-react";
-import { toggleGlobalAiLockdownAction, togglePolicyFreezeAction, switchRoleAction } from "@/app/actions";
+import { AlertOctagon, ShieldCheck, Zap, RefreshCw, UserCheck, Lock, Unlock, KeyRound } from "lucide-react";
+import { toggleEmergencyKillSwitchAction, togglePolicyFreezeAction, switchRoleAction } from "@/app/actions";
 
 interface LockdownControlProps {
   initialActive: boolean;
@@ -31,6 +31,7 @@ export function LockdownControl({
   const [reason, setReason] = useState(initialReason);
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [customReason, setCustomReason] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
 
   const [isFreezeActive, setIsFreezeActive] = useState(initialFreezeActive);
   const [freezeReason, setFreezeReason] = useState(initialFreezeReason);
@@ -40,7 +41,7 @@ export function LockdownControl({
   const [isPending, startTransition] = useTransition();
 
   const handleToggle = () => {
-    if (!isActive && !showReasonInput) {
+    if (!showReasonInput) {
       setShowReasonInput(true);
       return;
     }
@@ -50,13 +51,18 @@ export function LockdownControl({
     startTransition(async () => {
       try {
         const nextState = !isActive;
-        const res = await toggleGlobalAiLockdownAction(nextState, finalReason);
+        const res = await toggleEmergencyKillSwitchAction({
+          active: nextState,
+          reason: finalReason,
+          twoFactorCode: twoFactorCode.trim()
+        });
         setIsActive(res.active);
-        setReason(res.details.reason);
+        setReason(res.reason);
         setShowReasonInput(false);
         setCustomReason("");
-      } catch (err) {
-        alert(err instanceof Error ? err.message : "Failed to toggle global AI lockdown.");
+        setTwoFactorCode("");
+      } catch (err: any) {
+        alert(err instanceof Error ? err.message : "Failed to toggle emergency kill switch with 2FA.");
       }
     });
   };
@@ -141,26 +147,40 @@ export function LockdownControl({
 
           <div className="flex items-center gap-3 shrink-0">
             {showReasonInput ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   placeholder="Reason for lockdown..."
                   value={customReason}
                   onChange={(e) => setCustomReason(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-lg bg-slate-950 border border-rose-500/60 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-rose-500 w-64"
+                  className="px-3 py-1.5 text-xs rounded-lg bg-slate-950 border border-rose-500/60 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-rose-500 w-48"
                 />
+                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-rose-500/60">
+                  <KeyRound className="h-3 w-3 text-rose-400" />
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="2FA (774411)"
+                    value={twoFactorCode}
+                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ""))}
+                    className="w-24 bg-transparent text-white font-mono text-center text-xs placeholder-slate-600 focus:outline-none"
+                  />
+                </div>
                 <button
                   type="button"
-                  disabled={isPending}
+                  disabled={isPending || twoFactorCode.trim().length < 6}
                   onClick={handleToggle}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition disabled:opacity-40 cursor-pointer"
                 >
-                  {isPending ? "Locking..." : "Confirm Lockdown"}
+                  {isPending ? "Verifying..." : "Confirm 2FA"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowReasonInput(false)}
-                  className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                  onClick={() => {
+                    setShowReasonInput(false);
+                    setTwoFactorCode("");
+                  }}
+                  className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
                 >
                   Cancel
                 </button>

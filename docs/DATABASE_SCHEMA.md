@@ -15,6 +15,11 @@ This document provides the definitive architectural specification for the **X4G4
    - [5. `execution_logs`](#5-execution_logs)
    - [6. `hitl_requests`](#6-hitl_requests)
    - [7. `subject_encryption_keys`](#7-subject_encryption_keys)
+   - [8. `rate_limit_policies`](#8-rate_limit_policies)
+   - [9. `dlp_policies`](#9-dlp_policies)
+   - [10. `upstream_providers`](#10-upstream_providers)
+   - [11. `policy_recommendations`](#11-policy_recommendations)
+   - [12. `shadow_metrics`](#12-shadow_metrics)
 4. [Indexes & Performance Optimizations](#4-indexes--performance-optimizations)
 5. [Foreign Key Constraints & Cascade Semantics](#5-foreign-key-constraints--cascade-semantics)
 6. [Regulatory & Cryptographic Compliance Architecture](#6-regulatory--cryptographic-compliance-architecture)
@@ -34,8 +39,14 @@ erDiagram
     organizations ||--o{ policies : "configures (1:N)"
     organizations ||--o{ execution_logs : "records (1:N)"
     organizations ||--o{ subject_encryption_keys : "manages (1:N)"
+    organizations ||--o{ rate_limit_policies : "enforces (1:N)"
+    organizations ||--o{ dlp_policies : "applies (1:N)"
+    organizations ||--o{ upstream_providers : "registers (1:N)"
+    organizations ||--o{ policy_recommendations : "receives (1:N)"
+    organizations ||--o{ shadow_metrics : "aggregates (1:N)"
     policies ||--o{ policy_rules : "contains (1:N)"
     policies ||--o{ execution_logs : "triggers (1:N)"
+    policies ||--o{ shadow_metrics : "evaluates (1:N)"
     execution_logs ||--o| hitl_requests : "escalates (1:1)"
 
     organizations {
@@ -45,6 +56,10 @@ erDiagram
         text stripe_customer_id
         text billing_status
         integer retention_days
+        boolean kill_switch_active
+        timestamp kill_switch_activated_at
+        text kill_switch_reason
+        text kill_switch_two_factor_secret
         timestamp created_at
         timestamp updated_at
         timestamp deleted_at
@@ -67,6 +82,7 @@ erDiagram
         text name
         text target_tool
         text is_active
+        text mode
         policy_action action_on_match
         timestamp created_at
         timestamp updated_at
@@ -114,6 +130,71 @@ erDiagram
         text key_cipher
         timestamp created_at
         timestamp destroyed_at
+    }
+
+    rate_limit_policies {
+        text id PK
+        text org_id FK
+        text name
+        integer window_size_seconds
+        rate_limit_window window_enum
+        integer max_requests
+        integer max_tokens
+        rate_limit_scope scope
+        text is_active
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+
+    dlp_policies {
+        text id PK
+        text org_id FK
+        text name
+        dlp_action action
+        text detect_secrets
+        text detect_pii
+        jsonb custom_keywords
+        text is_active
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+
+    upstream_providers {
+        text id PK
+        text org_id FK
+        text name
+        text provider_type
+        text base_url
+        text auth_token
+        boolean is_internal
+        boolean is_active
+        timestamp created_at
+    }
+
+    policy_recommendations {
+        text id PK
+        text org_id FK
+        text target_tool
+        text field_path
+        text suggested_operator
+        text suggested_target_value
+        doublePrecision confidence_score
+        text reasoning
+        integer sample_size
+        text status
+        timestamp created_at
+    }
+
+    shadow_metrics {
+        text id PK
+        text policy_id
+        text org_id
+        timestamp bucket_hour
+        integer total_evaluated
+        integer would_have_blocked
+        integer would_have_passed
     }
 ```
 
@@ -168,6 +249,10 @@ Represents an isolated enterprise customer tenant and root of all relational sco
 | `stripe_customer_id` | `text` | Yes | `NULL` | — | External billing customer identifier. |
 | `billing_status` | `text` | No | `'active'` | — | Status of tenant account. |
 | `retention_days` | `integer` | No | `90` | — | **GDPR Art. 5(1)(e)** log retention window in days. |
+| `kill_switch_active` | `boolean` | No | `false` | — | Bilateral emergency air-gap severance toggle. |
+| `kill_switch_activated_at` | `timestamptz`| Yes | `NULL` | — | Timestamp of emergency air-gap severance. |
+| `kill_switch_reason` | `text` | Yes | `NULL` | — | Super Admin justification for air-gap severance. |
+| `kill_switch_two_factor_secret` | `text` | Yes | `NULL` | — | Encrypted RFC 6238 TOTP seed secret for 2FA verification. |
 | `created_at` | `timestamptz`| No | `NOW()` | — | Tenant creation timestamp. |
 | `updated_at` | `timestamptz`| No | `NOW()` | — | Last update timestamp. |
 | `deleted_at` | `timestamptz`| Yes | `NULL` | — | Soft-deletion timestamp. |
@@ -200,6 +285,7 @@ Defines tool-targeting guardrail containers configured by SecOps administrators.
 | `name` | `text` | No | — | — | Human-readable policy label. |
 | `target_tool` | `text` | No | — | — | Exact tool name (e.g. `issue_refund`) or `*` for all tools. |
 | `is_active` | `text` | No | `'true'` | — | Active status flag (`'true'` or `'false'`). |
+| `mode` | `text` | No | `'ACTIVE'` | — | Operational mode: `'ACTIVE'`, `'SHADOW_LEARN'`, or `'DISABLED'`. |
 | `action_on_match` | `policy_action`| No | `'BLOCK'` | — | Action triggered when all rules match (`ALLOW`, `BLOCK`, `REQUIRE_APPROVAL`). |
 | `created_at` | `timestamptz`| No | `NOW()` | — | Creation timestamp. |
 | `updated_at` | `timestamptz`| No | `NOW()` | — | Last update timestamp. |
@@ -270,6 +356,96 @@ Registry of ephemeral symmetric encryption keys enabling **GDPR Art. 17 / DPDP S
 
 ---
 
+### 8. `rate_limit_policies`
+Sliding and fixed window rate limits enforcing request volume and token consumption caps.
+
+| Column Name | SQL Type | Nullable | Default | Constraints | Description |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `text` | No | `randomUUID()` | `PRIMARY KEY` | Unique rate limit policy UUID. |
+| `org_id` | `text` | No | — | `FOREIGN KEY` $\rightarrow$ `organizations.id` | Scoped organization tenant. |
+| `name` | `text` | No | — | — | Human-readable quota identifier. |
+| `window_size_seconds` | `integer` | No | — | — | Time window in seconds (e.g. 3600 for 1h). |
+| `window_enum` | `rate_limit_window` | No | `'1_HOUR'` | — | Standardized window duration enum. |
+| `max_requests` | `integer` | No | — | — | Max allowed requests per window. |
+| `max_tokens` | `integer` | Yes | `NULL` | — | Optional token consumption ceiling per window. |
+| `scope` | `rate_limit_scope` | No | `'PER_USER'` | — | Quota enforcement level (`PER_USER`, `PER_IP`, `PER_ORG`). |
+| `is_active` | `text` | No | `'true'` | — | Active status flag. |
+| `created_at` | `timestamptz`| No | `NOW()` | — | Creation timestamp. |
+| `updated_at` | `timestamptz`| No | `NOW()` | — | Last update timestamp. |
+| `deleted_at` | `timestamptz`| Yes | `NULL` | — | Soft-deletion timestamp. |
+
+---
+
+### 9. `dlp_policies`
+Data Leakage Prevention rules scanning payloads in-flight for PII, high-entropy secrets, and keywords.
+
+| Column Name | SQL Type | Nullable | Default | Constraints | Description |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `text` | No | `randomUUID()` | `PRIMARY KEY` | Unique DLP policy UUID. |
+| `org_id` | `text` | No | — | `FOREIGN KEY` $\rightarrow$ `organizations.id` | Scoped organization tenant. |
+| `name` | `text` | No | — | — | Human-readable DLP rule identifier. |
+| `action` | `dlp_action` | No | `'REDACT'` | — | Enforcement action (`BLOCK`, `REDACT`, `ALERT_ONLY`). |
+| `detect_secrets` | `text` | No | `'true'` | — | Enable regex/entropy detection for API keys, AWS creds, JWTs. |
+| `detect_pii` | `text` | No | `'true'` | — | Enable detection for SSN, Aadhaar, Credit Cards, Emails, Phones. |
+| `custom_keywords` | `jsonb` | No | `'[]'` | — | Tenant-specific keyword and pattern blacklist. |
+| `is_active` | `text` | No | `'true'` | — | Active status flag. |
+| `created_at` | `timestamptz`| No | `NOW()` | — | Creation timestamp. |
+| `updated_at` | `timestamptz`| No | `NOW()` | — | Last update timestamp. |
+| `deleted_at` | `timestamptz`| Yes | `NULL` | — | Soft-deletion timestamp. |
+
+---
+
+### 10. `upstream_providers`
+Custom and on-premises inference endpoints (Ollama clusters, vLLM nodes, TGI, LocalAI).
+
+| Column Name | SQL Type | Nullable | Default | Constraints | Description |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `text` | No | `randomUUID()` | `PRIMARY KEY` | Unique provider UUID. |
+| `org_id` | `text` | No | — | `FOREIGN KEY` $\rightarrow$ `organizations.id` | Scoped organization tenant. |
+| `name` | `text` | No | — | — | Human-readable endpoint label (e.g. "Local Ollama Cluster"). |
+| `provider_type` | `text` | No | — | — | Runtime type (`OLLAMA`, `OPENAI_COMPATIBLE`, `ANTHROPIC`, `CUSTOM`). |
+| `base_url` | `text` | No | — | — | Reachable internal URL (e.g. `http://ollama:11434`). |
+| `auth_token` | `text` | Yes | `NULL` | — | Optional internal bearer token or auth header. |
+| `is_internal` | `boolean` | No | `true` | — | Flag denoting private VPC or sovereign network location. |
+| `is_active` | `boolean` | No | `true` | — | Availability status of provider endpoint. |
+| `created_at` | `timestamptz`| No | `NOW()` | — | Creation timestamp. |
+
+---
+
+### 11. `policy_recommendations`
+ML-synthesized policy candidates mined out-of-band by the decoupled Intelligence Plane.
+
+| Column Name | SQL Type | Nullable | Default | Constraints | Description |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `text` | No | `randomUUID()` | `PRIMARY KEY` | Unique recommendation UUID. |
+| `org_id` | `text` | No | — | `FOREIGN KEY` $\rightarrow$ `organizations.id` | Scoped organization tenant. |
+| `target_tool` | `text` | No | — | — | Mined tool name (e.g. `issue_refund`). |
+| `field_path` | `text` | No | — | — | Argument parameter path (e.g. `amount`). |
+| `suggested_operator` | `text` | No | — | — | Suggested comparison (`LESS_THAN_OR_EQUAL`, `IN`). |
+| `suggested_target_value` | `text` | No | — | — | Synthesized threshold (e.g. `200`). |
+| `confidence_score` | `doublePrecision` | No | — | — | Statistical confidence score ($0.0 \dots 1.0$). |
+| `reasoning` | `text` | No | — | — | Mathematical derivation and quantile rationale. |
+| `sample_size` | `integer` | No | — | — | Number of historical logs evaluated in sample. |
+| `status` | `text` | No | `'PENDING'` | — | Review status (`PENDING`, `ACCEPTED`, `DISMISSED`). |
+| `created_at` | `timestamptz`| No | `NOW()` | — | Recommendation timestamp. |
+
+---
+
+### 12. `shadow_metrics`
+Hourly rollups storing counterfactual evaluation telemetry for draft policies in `SHADOW_LEARN` mode.
+
+| Column Name | SQL Type | Nullable | Default | Constraints | Description |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `id` | `text` | No | `randomUUID()` | `PRIMARY KEY` | Unique rollup record UUID. |
+| `policy_id` | `text` | No | — | — | Target shadow policy identifier. |
+| `org_id` | `text` | No | — | — | Scoped organization tenant. |
+| `bucket_hour` | `timestamptz`| No | — | — | Hourly aggregation bucket timestamp. |
+| `total_evaluated` | `integer` | No | `0` | — | Total tool calls evaluated against shadow policy. |
+| `would_have_blocked`| `integer` | No | `0` | — | Total calls that matched blocking rules. |
+| `would_have_passed` | `integer` | No | `0` | — | Total calls that passed rules. |
+
+---
+
 ## 4. Indexes & Performance Optimizations
 
 To guarantee $<15\text{ms}$ end-to-end proxy latency and sub-second dashboard query performance, the following strategic indexes are maintained:
@@ -283,6 +459,11 @@ To guarantee $<15\text{ms}$ end-to-end proxy latency and sub-second dashboard qu
 | `exec_logs_org_created_idx` | `execution_logs` | `org_id`, `created_at DESC` | `COMPOSITE B-TREE` | Real-time 4-second dashboard log streaming and retention purging. |
 | `hitl_requests_status_idx` | `hitl_requests` | `status` | `B-TREE` | Fast retrieval of pending approval queues. |
 | `subject_keys_org_subject_idx` | `subject_encryption_keys` | `org_id`, `subject_id` | `UNIQUE COMPOSITE` | Fast subject key retrieval and atomic erasure. |
+| `rate_limit_org_idx` | `rate_limit_policies` | `org_id` | `B-TREE` | Organization quota lookup. |
+| `dlp_policies_org_idx` | `dlp_policies` | `org_id` | `B-TREE` | Organization DLP pipeline initialization. |
+| `providers_org_idx` | `upstream_providers` | `org_id` | `B-TREE` | Upstream provider endpoint resolution. |
+| `recommendations_org_status_idx` | `policy_recommendations` | `org_id`, `status` | `COMPOSITE B-TREE` | Unreviewed recommendation triage. |
+| `shadow_metrics_policy_bucket_idx`| `shadow_metrics` | `policy_id`, `bucket_hour` | `COMPOSITE B-TREE` | Time-series charting of shadow mode drift. |
 
 ---
 
@@ -297,6 +478,10 @@ To guarantee $<15\text{ms}$ end-to-end proxy latency and sub-second dashboard qu
 | `execution_logs`| `triggered_policy_id`| `policies.id` | `SET NULL` | **Audit Preservation:** Deleting a policy preserves historical execution logs. |
 | `hitl_requests` | `log_id` | `execution_logs.id` | `CASCADE` | Hold requests are tied directly to their execution log entry. |
 | `subject_encryption_keys` | `org_id` | `organizations.id` | `CASCADE` | Tenant lifecycle scoping. |
+| `rate_limit_policies` | `org_id` | `organizations.id` | `CASCADE` | Purges tenant rate limits upon account deletion. |
+| `dlp_policies` | `org_id` | `organizations.id` | `CASCADE` | Purges tenant DLP configurations upon account deletion. |
+| `upstream_providers` | `org_id` | `organizations.id` | `CASCADE` | Purges custom upstream endpoints upon account deletion. |
+| `policy_recommendations` | `org_id` | `organizations.id` | `CASCADE` | Purges ML recommendations upon account deletion. |
 
 ---
 
@@ -342,7 +527,12 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   apiKeys: many(apiKeys),
   policies: many(policies),
   executionLogs: many(executionLogs),
-  subjectEncryptionKeys: many(subjectEncryptionKeys)
+  subjectEncryptionKeys: many(subjectEncryptionKeys),
+  rateLimitPolicies: many(rateLimitPolicies),
+  dlpPolicies: many(dlpPolicies),
+  upstreamProviders: many(upstreamProviders),
+  policyRecommendations: many(policyRecommendations),
+  shadowMetrics: many(shadowMetrics)
 }));
 
 export const policiesRelations = relations(policies, ({ one, many }) => ({

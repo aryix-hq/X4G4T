@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Sparkles, Wand2 } from "lucide-react";
+import { Plus, Sparkles, Wand2, Globe } from "lucide-react";
 import { createPolicyAction } from "@/app/actions";
 
 export interface PolicyTemplate {
@@ -20,7 +20,8 @@ export interface PolicyTemplate {
     | "NOT_EQUALS"
     | "CONTAINS"
     | "REGEX"
-    | "IN";
+    | "IN"
+    | "CIDR_MATCH";
   targetValue: string;
 }
 
@@ -124,6 +125,26 @@ export const POLICY_TEMPLATES: PolicyTemplate[] = [
     fieldPath: "payload.text",
     operator: "REGEX",
     targetValue: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+  },
+  {
+    label: "CIDR Ingress Restrict",
+    category: "Security",
+    name: "Restrict Inbound Callers to Corporate CIDR",
+    targetTool: "*",
+    actionOnMatch: "ALLOW",
+    fieldPath: "network.source_ip",
+    operator: "CIDR_MATCH",
+    targetValue: "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16"
+  },
+  {
+    label: "Egress Host Whitelist",
+    category: "DevOps",
+    name: "Block Unapproved External Egress Targets",
+    targetTool: "*",
+    actionOnMatch: "BLOCK",
+    fieldPath: "network.destination_host",
+    operator: "NOT_EQUALS",
+    targetValue: "api.openai.com"
   }
 ];
 
@@ -185,6 +206,43 @@ export function PolicyFormWithTemplates({ isPolicyFrozen = false }: PolicyFormWi
         </div>
       </div>
 
+      {/* Network & Context Fields Reference */}
+      <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs space-y-2">
+        <div className="flex items-center justify-between text-slate-300 font-medium">
+          <div className="flex items-center gap-1.5 text-indigo-400">
+            <Globe className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Available Network &amp; Context Fields in Policy Rules:</span>
+          </div>
+          <span className="text-[10px] text-slate-500 font-mono">Supports CSV Multi-Path e.g. amount, total</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 font-mono text-[11px]">
+          <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+            <span className="text-cyan-400 font-bold">network.source_ip</span>
+            <p className="text-[10px] text-slate-400 font-sans mt-0.5">Caller IP (from X-Forwarded-For). Use with <span className="text-indigo-300 font-mono">CIDR_MATCH</span> e.g. <span className="text-slate-300">10.0.0.0/8, 192.168.0.0/16</span></p>
+          </div>
+          <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+            <span className="text-cyan-400 font-bold">network.destination_host</span>
+            <p className="text-[10px] text-slate-400 font-sans mt-0.5">Parsed target egress domain. Use with <span className="text-indigo-300 font-mono">EQUALS / IN</span> e.g. <span className="text-slate-300">api.openai.com</span></p>
+          </div>
+          <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+            <span className="text-cyan-400 font-bold">network.destination_port</span>
+            <p className="text-[10px] text-slate-400 font-sans mt-0.5">Egress port e.g. <span className="text-slate-300">443, 80, 5432</span></p>
+          </div>
+          <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+            <span className="text-cyan-400 font-bold">network.source_hostname</span>
+            <p className="text-[10px] text-slate-400 font-sans mt-0.5">Caller host e.g. <span className="text-slate-300">workstation-.*</span></p>
+          </div>
+          <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+            <span className="text-cyan-400 font-bold">network.protocol</span>
+            <p className="text-[10px] text-slate-400 font-sans mt-0.5">Egress transport protocol (<span className="text-slate-300">https, http</span>)</p>
+          </div>
+          <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+            <span className="text-cyan-400 font-bold">iam.userId / iam.roles</span>
+            <p className="text-[10px] text-slate-400 font-sans mt-0.5">Authenticated agent identity and role tokens</p>
+          </div>
+        </div>
+      </div>
+
       {/* Policy Form */}
       <form action={createPolicyAction} className="space-y-4 pt-3 border-t border-slate-800/80">
         <div className="flex items-center justify-between pb-2 text-sm font-semibold text-white">
@@ -200,7 +258,7 @@ export function PolicyFormWithTemplates({ isPolicyFrozen = false }: PolicyFormWi
         </div>
 
         {/* Row 1: Header Info */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="text-xs font-medium text-slate-400">Policy Name</label>
             <input
@@ -238,19 +296,32 @@ export function PolicyFormWithTemplates({ isPolicyFrozen = false }: PolicyFormWi
               <option value="ALLOW">ALLOW (Pass Through)</option>
             </select>
           </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-400">Deployment Mode</label>
+            <select
+              name="mode"
+              defaultValue="ACTIVE"
+              className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="ACTIVE">ACTIVE (Enforcing)</option>
+              <option value="SHADOW_LEARN">SHADOW_LEARN (Test)</option>
+              <option value="DISABLED">DISABLED (Off)</option>
+            </select>
+          </div>
         </div>
 
         {/* Row 2: Constraint Definition */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
           <div>
-            <label className="text-xs font-medium text-slate-400">Field Dot-Path</label>
+            <label className="text-xs font-medium text-slate-400">Field Dot-Path (CSV for multi-field)</label>
             <input
               name="fieldPath"
               required
               value={fieldPath}
               onChange={(e) => setFieldPath(e.target.value)}
-              placeholder="e.g. amount or transaction.total"
-              className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              placeholder="e.g. amount, transaction.total or network.source_ip"
+              className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-xs"
             />
           </div>
 
@@ -271,6 +342,7 @@ export function PolicyFormWithTemplates({ isPolicyFrozen = false }: PolicyFormWi
               <option value="CONTAINS">CONTAINS</option>
               <option value="REGEX">REGEX Match</option>
               <option value="IN">IN (Comma separated)</option>
+              <option value="CIDR_MATCH">CIDR Subnet Match (CIDR_MATCH)</option>
             </select>
           </div>
 

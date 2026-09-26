@@ -3,6 +3,8 @@ import { CompiledPolicy, RuleOperator } from "@x4g4t/policy-engine";
 import { eq, and, isNull } from "drizzle-orm";
 import { metricsRegistry } from "./metrics.js";
 
+import { getRedisConnection } from "./queue.js";
+
 interface CacheEntry {
   expiresAt: number;
   data: CompiledPolicy[];
@@ -10,6 +12,38 @@ interface CacheEntry {
 
 const policyCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60 * 1000;
+let isPolicySubscriberInitialized = false;
+
+export function initPolicyInvalidationSubscriber(): void {
+  if (isPolicySubscriberInitialized || process.env.NODE_ENV === "test") return;
+  try {
+    const redis = getRedisConnection();
+    const subscriber = redis.duplicate({ enableOfflineQueue: true, lazyConnect: false });
+    subscriber.subscribe("policies:invalidate", (err, count) => {
+      if (!err) {
+        isPolicySubscriberInitialized = true;
+        if (process.env.NODE_ENV !== "test") {
+          console.log(`[X4G4T Policies] Subscribed to policies:invalidate, channels=${count}`);
+        }
+      }
+    });
+
+    subscriber.on("message", (_channel, message) => {
+      try {
+        const payload = JSON.parse(message) as { orgId?: string };
+        if (payload.orgId) {
+          policyCache.delete(payload.orgId);
+        } else {
+          policyCache.clear();
+        }
+      } catch {
+        policyCache.clear();
+      }
+    });
+
+    subscriber.on("error", () => {});
+  } catch {}
+}
 
 let dbInstance: ReturnType<typeof createDbClient> | null = null;
 
@@ -33,6 +67,7 @@ export function clearPolicyCache() {
 }
 
 export async function getCompiledPoliciesForOrg(orgId: string): Promise<CompiledPolicy[]> {
+  initPolicyInvalidationSubscriber();
   const now = Date.now();
   const cached = policyCache.get(orgId);
   if (cached && cached.expiresAt > now) {
@@ -47,6 +82,7 @@ export async function getCompiledPoliciesForOrg(orgId: string): Promise<Compiled
         policyName: policies.name,
         targetTool: policies.targetTool,
         actionOnMatch: policies.actionOnMatch,
+        mode: policies.mode,
         ruleId: policyRules.id,
         fieldPath: policyRules.fieldPath,
         operator: policyRules.operator,
@@ -71,6 +107,7 @@ export async function getCompiledPoliciesForOrg(orgId: string): Promise<Compiled
           name: row.policyName,
           targetTool: row.targetTool,
           actionOnMatch: row.actionOnMatch,
+          mode: (row.mode as "ACTIVE" | "SHADOW_LEARN" | "DISABLED") || "ACTIVE",
           rules: []
         });
       }
@@ -240,3 +277,87 @@ export async function forwardDownstream(
     clearTimeout(timeoutId);
   }
 }
+
+export interface StreamingCallbacks {
+  onFirstToken?: (ttft: number) => void;
+  onChunk?: (chunk: string) => void;
+  onComplete?: (tokens: number) => void;
+}
+
+export async function forwardDownstreamStreaming(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  signal: AbortSignal,
+  callbacks: StreamingCallbacks
+): Promise<void> {
+  const injectedHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...headers
+  };
+
+  const authHeader = injectedHeaders["Authorization"] || injectedHeaders["authorization"];
+  const isGatewayProxyKey = Boolean(authHeader && authHeader.includes("sec_live_"));
+  const isDummyKey = Boolean(
+    authHeader &&
+    (authHeader.includes("dummy") ||
+     authHeader.includes("sk-ant-dummy") ||
+     authHeader.includes("sk-dummy") ||
+     authHeader.includes("developer-session"))
+  );
+
+  if (!authHeader || isGatewayProxyKey || isDummyKey) {
+    if (url.includes("api.openai.com") && process.env.OPENAI_API_KEY) {
+      injectedHeaders["Authorization"] = `Bearer ${process.env.OPENAI_API_KEY}`;
+      metricsRegistry.tokensInjectedTotal.inc({ provider: "openai" });
+    } else if (url.includes("api.anthropic.com") && process.env.ANTHROPIC_API_KEY) {
+      delete injectedHeaders["Authorization"];
+      delete injectedHeaders["authorization"];
+      injectedHeaders["x-api-key"] = process.env.ANTHROPIC_API_KEY;
+      injectedHeaders["anthropic-version"] = injectedHeaders["anthropic-version"] || "2023-06-01";
+      metricsRegistry.tokensInjectedTotal.inc({ provider: "anthropic" });
+    } else if (url.includes("generativelanguage.googleapis.com") && process.env.GEMINI_API_KEY) {
+      delete injectedHeaders["Authorization"];
+      delete injectedHeaders["authorization"];
+      injectedHeaders["x-goog-api-key"] = process.env.GEMINI_API_KEY;
+      metricsRegistry.tokensInjectedTotal.inc({ provider: "gemini" });
+    }
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: injectedHeaders,
+    body: JSON.stringify(body),
+    signal
+  });
+
+  if (!res.body) {
+    callbacks.onComplete?.(0);
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  const streamStartTime = performance.now();
+  let firstTokenSent = false;
+  let tokenCount = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      if (!firstTokenSent) {
+        firstTokenSent = true;
+        callbacks.onFirstToken?.(Math.round(performance.now() - streamStartTime));
+      }
+
+      tokenCount += Math.max(1, Math.round(chunk.length / 4));
+      callbacks.onChunk?.(chunk);
+    }
+  } finally {
+    callbacks.onComplete?.(tokenCount);
+  }
+}
+

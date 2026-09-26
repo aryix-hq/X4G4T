@@ -25,8 +25,7 @@ function getRedisClient(): Redis | null {
   if (!redisClient && process.env.REDIS_URL) {
     try {
       redisClient = new Redis(process.env.REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        lazyConnect: true
+        maxRetriesPerRequest: 1
       });
       redisClient.on("error", (err: Error) => {
         if (process.env.NODE_ENV !== "test") {
@@ -42,9 +41,9 @@ function getRedisClient(): Redis | null {
 
 export const DEFAULT_RATE_LIMIT_POLICY: RateLimitPolicyConfig = {
   id: "pol_default_rate_limit",
-  name: "Enterprise Sliding Window (100 req / 1 hour)",
+  name: "Enterprise Sliding Window (10,000 req / 1 hour)",
   windowSizeSeconds: 3600,
-  maxRequests: 100,
+  maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "10000", 10),
   scope: "PER_USER"
 };
 

@@ -11,7 +11,7 @@ export function getRedisConnection(): Redis {
     redisInstance = new Redis(REDIS_URL, {
       maxRetriesPerRequest: null,
       enableOfflineQueue: false,
-      lazyConnect: true,
+      lazyConnect: false,
       retryStrategy(times: number) {
         if (times > 3) return null; // stop retrying after 3 attempts
         return Math.min(times * 100, 1000);
@@ -31,10 +31,19 @@ export function getRedisConnection(): Redis {
 export interface AuditLogJobPayload {
   orgId: string;
   agentId: string;
+  userEmail?: string;
+  userName?: string;
+  clientIp?: string;
+  clientHostname?: string;
+  sessionId?: string;
   toolName: string;
   arguments: Record<string, unknown>;
-  verdict: "PASSED" | "BLOCKED" | "HELD";
+  verdict: "PASSED" | "BLOCKED" | "HELD" | "STREAMING_ACTIVE";
   triggeredPolicyId?: string;
+  mode?: string;
+  isStreaming?: boolean;
+  timeToFirstTokenMs?: number;
+  totalTokens?: number;
   latencyMs: number;
   createdAt: string;
 }
@@ -48,6 +57,17 @@ export function getAuditLogQueue(): Queue<AuditLogJobPayload> {
   return auditQueueInstance;
 }
 
+const inMemoryFallbackBuffer: AuditLogJobPayload[] = [];
+const MAX_FALLBACK_BUFFER_SIZE = 10000;
+
+export function getFallbackAuditLogs(): AuditLogJobPayload[] {
+  return [...inMemoryFallbackBuffer];
+}
+
+export function clearFallbackAuditLogs(): void {
+  inMemoryFallbackBuffer.length = 0;
+}
+
 export async function enqueueAuditLog(payload: AuditLogJobPayload): Promise<void> {
   try {
     const queue = getAuditLogQueue();
@@ -56,10 +76,12 @@ export async function enqueueAuditLog(payload: AuditLogJobPayload): Promise<void
       removeOnFail: 1000
     });
   } catch (err) {
-    // Zero hot-path interruption: Redis enqueue failures are logged as warnings
-    // so downstream tool calls are not blocked by telemetry transient issues.
+    // Fail-Safe: Buffer security event in memory during Redis partition so zero events are dropped
+    if (inMemoryFallbackBuffer.length < MAX_FALLBACK_BUFFER_SIZE) {
+      inMemoryFallbackBuffer.push(payload);
+    }
     if (process.env.NODE_ENV !== "test") {
-      console.warn("[X4G4T Telemetry Queue Warning] Failed to enqueue log:", (err as Error).message);
+      console.warn("[X4G4T Telemetry Queue Warning] Buffered to in-memory failover:", (err as Error).message);
     }
   }
 }

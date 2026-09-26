@@ -1,0 +1,10 @@
+{
+  "name": "@x4g4t/graylog-forwarder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "echo 'built'"
+  }
+}

@@ -20,6 +20,13 @@ export const PolicyActionSchema = z.enum([
 ]);
 export type PolicyAction = z.infer<typeof PolicyActionSchema>;
 
+export const PolicyModeSchema = z.enum([
+  "ACTIVE",
+  "SHADOW_LEARN",
+  "DISABLED"
+]);
+export type PolicyMode = z.infer<typeof PolicyModeSchema>;
+
 export interface CompiledRule {
   id: string;
   fieldPath: string; // Dot-path, e.g. "transaction.total" or "amount"
@@ -32,6 +39,7 @@ export interface CompiledPolicy {
   name: string;
   targetTool: string; // Tool name, e.g. "issue_refund" or "*"
   actionOnMatch: PolicyAction;
+  mode?: PolicyMode;
   rules: CompiledRule[];
 }
 
@@ -50,12 +58,20 @@ export interface EvaluationContext {
   iam?: IamContext;
 }
 
+export interface ShadowEvaluation {
+  policyId: string;
+  policyName: string;
+  wouldVerdict: PolicyAction;
+  reason?: string;
+}
+
 export interface EvaluationResult {
   verdict: PolicyAction;
   matchedPolicyId?: string;
   violatingRuleId?: string;
   reason?: string;
   latencyMs: number;
+  shadowResults?: ShadowEvaluation[];
 }
 
 export interface LogRecordToHash {

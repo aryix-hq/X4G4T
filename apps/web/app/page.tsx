@@ -29,25 +29,48 @@ export default async function HomePage() {
           </span>
         </div>
 
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-3 sm:gap-4">
+          <Link
+            href="/status"
+            className="text-xs text-emerald-400 hover:text-emerald-300 transition font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/40 border border-emerald-800/60"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            System Status
+          </Link>
+
+          <Link
+            href="/dashboard/policies"
+            className="text-xs text-slate-300 hover:text-white transition font-medium hidden sm:inline"
+          >
+            Policies
+          </Link>
+
+          <Link
+            href="/dashboard/insights"
+            className="text-xs text-purple-300 hover:text-purple-200 transition font-medium hidden sm:inline"
+          >
+            AI Insights
+          </Link>
+
           <Link
             href="/dashboard/docs"
-            className="text-xs text-slate-400 hover:text-white transition font-medium"
+            className="text-xs text-slate-400 hover:text-white transition font-medium hidden md:inline"
           >
-            Documentation
+            Docs
           </Link>
+
           {isAuthenticated ? (
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-sm"
             >
               <LayoutDashboard className="h-3.5 w-3.5" />
-              Go to Dashboard
+              Console
             </Link>
           ) : (
             <Link
               href="/sign-in"
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-sm"
             >
               <LogIn className="h-3.5 w-3.5" />
               Sign In
@@ -123,6 +146,40 @@ export default async function HomePage() {
           </div>
         </div>
       </main>
+
+      {/* Corporate Branded Footer */}
+      <footer className="border-t border-slate-900 bg-slate-950/80 py-6 px-6 text-xs text-slate-500">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-400">X4G4T</span>
+            <span>•</span>
+            <span>Zero-Latency Headless Policy Firewall &amp; DLP Proxy</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://www.aryix.co.in/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-400 hover:text-indigo-400 transition underline underline-offset-4"
+            >
+              ARYIX (OPC) Private Limited
+            </a>
+            <span>•</span>
+            <Link href="/status" className="hover:text-emerald-400 transition">
+              System Status
+            </Link>
+            <span>•</span>
+            <a
+              href="http://localhost:3001/d/x4g4t-system-status"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-slate-300 transition"
+            >
+              Grafana
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

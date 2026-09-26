@@ -1,0 +1,22 @@
+{
+  "name": "@x4g4t/aux-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@x4g4t/tsconfig": "workspace:*",
+    "@types/node": "^20.14.9",
+    "tsx": "^4.23.13",
+    "typescript": "^5.5.4"
+  }
+}

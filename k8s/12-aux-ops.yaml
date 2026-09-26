@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-aux-ops
+  namespace: x4g4t
+  labels:
+    app: x4g4t-aux-ops
+    app.kubernetes.io/name: x4g4t-aux-ops
+    app.kubernetes.io/part-of: x4g4t-platform
+    app.kubernetes.io/component: operations-housekeeping
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: x4g4t-aux-ops
+  template:
+    metadata:
+      labels:
+        app: x4g4t-aux-ops
+        app.kubernetes.io/name: x4g4t-aux-ops
+        app.kubernetes.io/component: operations-housekeeping
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: aux-ops
+          image: ghcr.io/aryix-hq/x4g4t-proxy:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "apps/proxy/dist/aux-ops.js"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - containerPort: 5050
+              name: http
+          env:
+            - name: PORT
+              value: "5050"
+            - name: NODE_ENV
+              value: "production"
+            - name: MONITORED_SERVICES
+              value: "proxy:4000,web:3000,ml-service:5001,postgres:5432,redis:6379,elasticsearch:9200"
+          envFrom:
+            - configMapRef:
+                name: x4g4t-config
+            - secretRef:
+                name: x4g4t-secrets
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5050
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5050
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x4g4t-aux-ops
+  namespace: x4g4t
+  labels:
+    app: x4g4t-aux-ops
+    app.kubernetes.io/name: x4g4t-aux-ops
+    app.kubernetes.io/part-of: x4g4t-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5050
+      targetPort: 5050
+      name: http
+      protocol: TCP
+  selector:
+    app: x4g4t-aux-ops

@@ -4,6 +4,7 @@ import { evaluateAgentExecution, sanitizePayload, exportLogToExternalServices } 
 import { getCompiledPoliciesForOrg, forwardDownstream } from "../services/gateway.js";
 import { enqueueAuditLog } from "../services/queue.js";
 import { metricsRegistry } from "../services/metrics.js";
+import { recordShadowEvaluation } from "../services/shadow.js";
 
 // JSON-RPC 2.0 Base Schema
 export const JsonRpcRequestSchema = z.object({
@@ -26,6 +27,12 @@ export const mcpRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const startTime = performance.now();
+
+      // Emergency kill-switch enforcement (global and org-scoped bilateral air-gap)
+      const killSwitchBlocked = await fastify.checkKillSwitch(request, reply);
+      if (killSwitchBlocked) {
+        return;
+      }
 
       // Inbound payload size telemetry
       if (request.body) {
@@ -112,6 +119,11 @@ export const mcpRoutes: FastifyPluginAsync = async (fastify) => {
 
       const { sanitized: sanitizedArgs } = sanitizePayload(toolArgs);
       const latencyMs = Math.round(performance.now() - startTime);
+
+      // Record shadow learning evaluations asynchronously
+      if (evalResult.shadowResults && evalResult.shadowResults.length > 0) {
+        void recordShadowEvaluation(request.orgId, evalResult.shadowResults);
+      }
 
       // Handle BLOCK
       if (evalResult.verdict === "BLOCK") {

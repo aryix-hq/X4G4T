@@ -176,6 +176,29 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  apps/aux-ops:
+    dependencies:
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.9
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.9
+        version: 20.19.43
+      '@x4g4t/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  apps/client-simulator: {}
+
+  apps/graylog-forwarder: {}
+
   apps/proxy:
     dependencies:
       '@x4g4t/db':
@@ -206,12 +229,12 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
-      '@x4g4t/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^20.14.9
         version: 20.19.43
+      '@x4g4t/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       tsx:
         specifier: ^4.16.2
         version: 4.23.13
@@ -224,18 +247,18 @@ importers:
 
   apps/web:
     dependencies:
-      '@x4g4t/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@x4g4t/policy-engine':
-        specifier: workspace:*
-        version: link:../../packages/policy-engine
       '@clerk/nextjs':
         specifier: ^5.3.0
         version: 5.7.6(next@15.5.25(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@vercel/functions':
         specifier: ^3.9.8
         version: 3.9.8
+      '@x4g4t/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@x4g4t/policy-engine':
+        specifier: workspace:*
+        version: link:../../packages/policy-engine
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -267,9 +290,6 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
-      '@x4g4t/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^20.14.9
         version: 20.19.43
@@ -279,6 +299,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.3.0(@types/react@19.3.0)
+      '@x4g4t/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       postcss:
         specifier: ^8.4.41
         version: 8.5.28
@@ -301,12 +324,12 @@ importers:
         specifier: ^3.4.5
         version: 3.4.9
     devDependencies:
-      '@x4g4t/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
       '@types/node':
         specifier: ^20.14.9
         version: 20.19.43
+      '@x4g4t/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       drizzle-kit:
         specifier: ^0.30.0
         version: 0.30.6
@@ -323,12 +346,12 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
-      '@x4g4t/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
       '@types/node':
         specifier: ^20.14.9
         version: 20.19.43
+      '@x4g4t/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       typescript:
         specifier: ^5.5.4
         version: 5.9.3

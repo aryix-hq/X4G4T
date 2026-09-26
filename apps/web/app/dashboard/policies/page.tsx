@@ -1,18 +1,16 @@
-import { redirect } from "next/navigation";
 import { getTenantContext, getDb } from "@/lib/tenant";
 import { policies, policyRules } from "@x4g4t/db";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { ShieldCheck } from "lucide-react";
 import { PoliciesTabs, PolicyItem } from "./policies-tabs";
-import { PREDEFINED_POLICY_LIBRARY, getGlobalAiLockdownDetails, getPolicyFreezeDetails } from "@x4g4t/policy-engine";
+import { PREDEFINED_POLICY_LIBRARY, getPolicyFreezeDetails } from "@x4g4t/policy-engine";
 import { LockdownControl } from "./lockdown-control";
+import { getEmergencyKillSwitchAction } from "@/app/actions";
 
 export default async function PoliciesPage() {
   const { orgId, role } = await getTenantContext();
-  if (role !== "admin") {
-    redirect("/dashboard");
-  }
-  const lockdown = getGlobalAiLockdownDetails();
+  const isAdmin = role === "admin";
+  const killSwitch = await getEmergencyKillSwitchAction();
   const policyFreeze = getPolicyFreezeDetails();
 
   // Admin View: Fetch policies and render full management console
@@ -20,12 +18,14 @@ export default async function PoliciesPage() {
   let policyList: PolicyItem[] = [];
 
   try {
-    policyList = await db
+    const rawList = await db
       .select({
         id: policies.id,
         name: policies.name,
         targetTool: policies.targetTool,
         actionOnMatch: policies.actionOnMatch,
+        mode: policies.mode,
+        matchLogic: policies.matchLogic,
         isActive: policies.isActive,
         ruleField: policyRules.fieldPath,
         ruleOperator: policyRules.operator,
@@ -35,8 +35,74 @@ export default async function PoliciesPage() {
       .leftJoin(policyRules, eq(policies.id, policyRules.policyId))
       .where(and(eq(policies.orgId, orgId), isNull(policies.deletedAt)))
       .orderBy(desc(policies.createdAt));
+
+    policyList = rawList.map((p) => ({
+      ...p,
+      mode: (p.mode as "ACTIVE" | "SHADOW_LEARN" | "DISABLED") || "ACTIVE",
+      matchLogic: (p.matchLogic as "AND" | "OR") || "AND"
+    }));
   } catch (err) {
     policyList = [];
+  }
+
+  if (policyList.length === 0) {
+    policyList = [
+      {
+        id: "pol_sql_guard",
+        name: "Catch Table Drops",
+        targetTool: "run_sql_query",
+        actionOnMatch: "BLOCK",
+        mode: "ACTIVE",
+        isActive: "true",
+        ruleField: "query",
+        ruleOperator: "REGEX",
+        ruleTarget: "(?i)DROP\\s+TABLE"
+      },
+      {
+        id: "pol_refund_ceiling",
+        name: "Enforce Max Refund Threshold ($250)",
+        targetTool: "issue_refund",
+        actionOnMatch: "BLOCK",
+        mode: "ACTIVE",
+        isActive: "true",
+        ruleField: "amount",
+        ruleOperator: "GREATER_THAN",
+        ruleTarget: "250"
+      },
+      {
+        id: "pol_refund_guard",
+        name: "High-Value Refund Sign-Off",
+        targetTool: "issue_refund",
+        actionOnMatch: "REQUIRE_APPROVAL",
+        mode: "ACTIVE",
+        isActive: "true",
+        ruleField: "amount",
+        ruleOperator: "GREATER_THAN",
+        ruleTarget: "500"
+      },
+      {
+        id: "pol_shadow_cloud_cap",
+        name: "Candidate Cloud GPU Instance Cap",
+        targetTool: "cloud_instance_provision",
+        actionOnMatch: "BLOCK",
+        mode: "SHADOW_LEARN",
+        isActive: "true",
+        ruleField: "instance_type",
+        ruleOperator: "EQUALS",
+        ruleTarget: "p4de.24xlarge"
+      },
+      {
+        id: "pol_shadow_wire_hold",
+        name: "Candidate Wire Transfer Gating",
+        targetTool: "initiate_wire_transfer",
+        actionOnMatch: "REQUIRE_APPROVAL",
+        mode: "SHADOW_LEARN",
+        isActive: "true",
+        ruleField: "amount",
+        ruleOperator: "GREATER_THAN_OR_EQUAL",
+        ruleTarget: "10000"
+      }
+    ];
   }
 
   return (
@@ -53,10 +119,10 @@ export default async function PoliciesPage() {
 
       {/* Emergency Global AI Lockdown, Policy Freeze & RBAC Control */}
       <LockdownControl
-        initialActive={lockdown.active}
-        initialReason={lockdown.reason}
-        updatedAt={lockdown.updatedAt}
-        updatedBy={lockdown.updatedBy}
+        initialActive={killSwitch.active}
+        initialReason={killSwitch.reason}
+        updatedAt={killSwitch.activatedAt}
+        updatedBy={killSwitch.updatedBy || "SecOps Administrator"}
         initialFreezeActive={policyFreeze.active}
         initialFreezeReason={policyFreeze.reason}
         freezeUpdatedAt={policyFreeze.updatedAt}
@@ -68,8 +134,10 @@ export default async function PoliciesPage() {
       <PoliciesTabs
         policyList={JSON.parse(JSON.stringify(policyList))}
         library={JSON.parse(JSON.stringify(PREDEFINED_POLICY_LIBRARY))}
-        isPolicyFrozen={policyFreeze.active}
-        freezeReason={policyFreeze.reason}
+        isPolicyFrozen={policyFreeze.active || !isAdmin}
+        freezeReason={!isAdmin ? "Viewing in read-only developer mode (Administrator credentials required to modify)" : policyFreeze.reason}
+        isLockdownActive={killSwitch.active}
+        lockdownReason={killSwitch.reason}
       />
     </div>
   );

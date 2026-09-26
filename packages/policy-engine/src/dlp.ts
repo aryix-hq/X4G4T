@@ -75,6 +75,17 @@ export function validateLuhn(numStr: string): boolean {
 }
 
 /**
+ * Normalizes input strings using Unicode NFKC normalization and strips zero-width/hidden
+ * characters (U+200B to U+200D, U+FEFF, U+2060, U+180E) to neutralize DLP evasion attempts.
+ */
+export function normalizeDlpInput(text: string): string {
+  if (!text || typeof text !== "string") return "";
+  return text
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF\u2060\u180E]/g, "");
+}
+
+/**
  * Inspects and sanitizes a string for DLP violations based on policy config.
  */
 export function inspectStringDlp(
@@ -83,7 +94,7 @@ export function inspectStringDlp(
   fieldName?: string
 ): { sanitizedText: string; violations: DlpViolation[] } {
   const violations: DlpViolation[] = [];
-  let result = text;
+  let result = normalizeDlpInput(text);
 
   const detectSecrets = config.detectSecrets !== false;
   const detectPii = config.detectPii !== false;

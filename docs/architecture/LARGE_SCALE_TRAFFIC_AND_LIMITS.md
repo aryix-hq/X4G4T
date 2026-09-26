@@ -102,42 +102,77 @@ At 100,000 RPS, persisting audit logs directly to PostgreSQL would require 100,0
 | **Batch Worker Draining**| 500 records per DB write | Log consumer workers read 500 items per tick and execute multi-row `INSERT`. |
 | **Worker Scaling** | 1 worker per 5,000 RPS | 20 worker instances drain 100k RPS with zero queue backlog. |
 
----
+### 3. Elasticsearch 8+ Enterprise Ingestion & ILM Architecture
 
-### 3. PostgreSQL Database & Storage Scaling
+To ingest and search millions of audit logs without indexing lag or memory exhaustion, Elasticsearch 8+ is deployed in a dedicated **Hot-Warm-Cold tiering topology**:
 
-#### Table Partitioning on `execution_logs`
-At 100,000 RPS, the system generates $8.64\text{ billion}$ records per day.
-To prevent B-Tree index degradation:
-- `execution_logs` is partitioned by range on `created_at` (Monthly partitions).
-- Queries for the live dashboard stream only scan the active month's partition.
-- Dropping expired logs under **GDPR Art. 5(1)(e)** is an instantaneous `DROP TABLE execution_logs_2026_01` rather than a costly `DELETE` query with vacuum overhead.
-
-```sql
--- Production Monthly Partitioning
-CREATE TABLE execution_logs (
-    id TEXT NOT NULL,
-    org_id TEXT NOT NULL,
-    agent_id TEXT NOT NULL,
-    tool_name TEXT NOT NULL,
-    arguments JSONB NOT NULL,
-    verdict log_verdict NOT NULL,
-    triggered_policy_id TEXT,
-    latency_ms INTEGER NOT NULL,
-    previous_record_hash TEXT,
-    record_hash TEXT,
-    is_pii_redacted TEXT DEFAULT 'true' NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (id, created_at)
-) PARTITION BY RANGE (created_at);
-
-CREATE TABLE execution_logs_2026_09 PARTITION OF execution_logs
-    FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
+```
+[ BullMQ / Vector / Log Consumer ]
+                │
+                ▼ (Bulk Indexing: 1,000 docs/batch)
+┌────────────────────────────────────────────────────────┐
+│ HOT TIER: High-Ingest Data Nodes (3-6 Nodes)           │
+│ • Local NVMe SSD Storage (10,000+ IOPS)                │
+│ • JVM Heap: 31 GB (Compressed OOPs boundary)           │
+│ • Host RAM: 64 GB (50% OS filesystem cache)            │
+│ • Index Buffer: 20% RAM (indices.memory.index_buffer)  │
+│ • Refresh Interval: 30s (prevents merge starvation)    │
+│ • Shard Sizing: 30 - 50 GB per primary shard           │
+└──────────────────────────┬─────────────────────────────┘
+                           │ (ILM Transition at 50GB or 7 Days)
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│ WARM TIER: Query & Forensic Nodes (2-4 Nodes)          │
+│ • High-Density EBS / SSD Storage                       │
+│ • Shrunk to 1 Replica, Force-Merged to 1 Segment       │
+│ • Optimized for Dashboard Filtering & RegEx Searches   │
+└──────────────────────────┬─────────────────────────────┘
+                           │ (ILM Transition at 30 Days)
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│ COLD / FROZEN TIER: Long-Term Archive (S3 / GCS)       │
+│ • Searchable Snapshots mounted directly from Cloud     │
+│ • Retained until organization's retention_days window  │
+│ • Automated Deletion under GDPR Art. 5(1)(e)           │
+└────────────────────────────────────────────────────────┘
 ```
 
-#### Connection Pooling via PgBouncer / RDS Proxy
-- 20 Proxy instances + 20 Worker instances = thousands of concurrent database connections.
-- **PgBouncer** is deployed in `transaction` pooling mode, capping active PostgreSQL connections to 100 on the database engine.
+#### Elasticsearch Production Tuning Invariants:
+1. **JVM Heap Cap:** Never exceed 31 GB (`-Xms31g -Xmx31g`). Allocating 32GB+ causes the JVM to drop 32-bit Compressed Object Pointers (OOPs), halving effective heap efficiency.
+2. **Asynchronous Translog:** Configure `index.translog.durability: async` and `index.translog.sync_interval: 10s` for high-throughput bulk streams.
+3. **Cluster Quorum:** Deploy 3 dedicated Master-Eligible nodes (`node.roles: [master]`) separate from data nodes to eliminate split-brain risk and GC stalls.
+
+---
+
+### 4. Redis Enterprise & Sharded Cluster Topology
+
+Redis serves as both the ultra-fast atomic state store (kill switch, rate limits) and the Pub/Sub bus.
+
+| Parameter | Recommended Setting | Architectural Rationale |
+| :--- | :--- | :--- |
+| **Topology** | 6-Node Redis Cluster (3 Primary, 3 Replica) | Sharded throughput across slots; zero single point of failure. |
+| **Pub/Sub Client Buffer** | `client-output-buffer-limit pubsub 512mb 128mb 60` | Prevents slow proxy subscribers from getting disconnected during broadcast bursts. |
+| **Maxmemory Policy** | `volatile-lru` | Protects persistent keys while safely evicting expired rate limit buckets. |
+| **Replication Backlog** | `repl-backlog-size 512mb` | Allows temporary network partitions between AZs without full resync. |
+| **Persistence** | RDB snapshots every 15m + AOF (`appendfsync everysec`) | Guarantees audit and rate-limit durability. |
+
+---
+
+### 5. Decoupled ML Intelligence Plane at Enterprise Scale
+
+The standalone ML microservice (`x4g4t-ml-service` on port 5001) scales independently from the proxy:
+1. **Zero Impact on Ingestion SLA:** The Fastify Proxy (`:4000`) never performs heavy array sorting, quantile estimation, or variance calculation. All ML tasks run in background pods.
+2. **Read-Replica Query Routing:** The ML daemon queries PostgreSQL **Read Replicas** for historical execution samples, completely offloading analytical reads from the primary OLTP database.
+3. **Horizontal Scaling:** When multiple ML pods are deployed, tenant mining jobs are distributed via Redis distributed locks (`redlock:mine:<org_id>`), ensuring only one pod analyzes a given organization at a time.
+
+---
+
+### 6. Bilateral Emergency Air-Gap Kill Switch at Hyperscale
+
+In a multi-region deployment with hundreds of proxy pods:
+1. **Distributed Event Fanout:** When an admin activates the kill switch with 2FA, the Control Plane sets `killswitch:org:<org_id>` in the primary Redis cluster and broadcasts `killswitch:invalidation` across all regions.
+2. **Sub-Millisecond Pod Severance:** Every proxy pod's local Redis subscriber receives the message and flips an in-memory atomic boolean in $<1\mu\text{s}$.
+3. **Zero Outbound Traffic:** Ingress requests immediately receive HTTP 503 `EMERGENCY_KILL_SWITCH_ACTIVE`, while pending outbound sockets to upstream models are forcefully destroyed with `socket.destroy()`.
 
 ---
 
@@ -149,7 +184,8 @@ Hot Path Breakdown at 100,000 RPS:
 │ Inbound Socket & TLS Termination:       1.2ms          │
 │ In-Memory SHA-256 Key Cache Hit:        0.3ms          │
 │ In-Memory Pure AST Policy Evaluation:   0.005ms (5µs)  │
-│ Non-Blocking Redis Queue LPUSH:         1.8ms          │
+│ In-Flight Streaming DLP Scrubbing:      0.8ms          │
+│ Non-Blocking Redis Queue LPUSH:         1.0ms          │
 │ Total X4G4T Firewall Overhead:       3.305ms        │
 │ Downstream Target API (Stripe, etc):   45.0ms          │
 │ Total Round-Trip Time:                 48.305ms        │
@@ -193,5 +229,6 @@ spec:
 ### High-Availability Failover Plan
 1. **Multi-AZ Redis:** Primary with automatic failover to read replica in $<15\text{ seconds}$.
 2. **PostgreSQL Multi-AZ:** Automated failover to standby replica with zero data loss ($RPO = 0$, $RTO < 30\text{s}$).
-3. **Fail-Closed Guarantee:** If Redis or the database is temporarily unreachable, the Proxy continues evaluating guardrails using in-memory cached policies. If in-memory state cannot be validated, tool execution **fails closed** to prevent unauthorized mutations.
+3. **Elasticsearch Auto-Rebalance:** Shard reallocation across healthy data nodes upon node failure with zero downtime.
+4. **Fail-Closed Guarantee:** If Redis or the database is temporarily unreachable, the Proxy continues evaluating guardrails using in-memory cached policies. If in-memory state cannot be validated, tool execution **fails closed** to prevent unauthorized mutations.
 

@@ -6,6 +6,8 @@ import {
   timestamp,
   pgEnum,
   integer,
+  boolean,
+  doublePrecision,
   jsonb,
   index,
   uniqueIndex
@@ -30,7 +32,8 @@ export const ruleOperatorEnum = pgEnum("rule_operator", [
   "LESS_THAN_OR_EQUAL",
   "CONTAINS",
   "REGEX",
-  "IN"
+  "IN",
+  "CIDR_MATCH"
 ]);
 
 export const logVerdictEnum = pgEnum("log_verdict", [
@@ -77,6 +80,10 @@ export const organizations = pgTable("organizations", {
   stripeCustomerId: text("stripe_customer_id"),
   billingStatus: text("billing_status").default("active").notNull(),
   retentionDays: integer("retention_days").default(90).notNull(), // GDPR Art. 5(1)(e) & DPDP Sec. 8(7)
+  killSwitchActive: boolean("kill_switch_active").default(false).notNull(),
+  killSwitchActivatedAt: timestamp("kill_switch_activated_at", { withTimezone: true }),
+  killSwitchReason: text("kill_switch_reason"),
+  killSwitchTwoFactorSecret: text("kill_switch_two_factor_secret"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true })
@@ -108,6 +115,8 @@ export const policies = pgTable("policies", {
   name: text("name").notNull(),
   targetTool: text("target_tool").notNull(), // e.g., "issue_refund" or "*"
   isActive: text("is_active").default("true").notNull(),
+  mode: text("mode").default("ACTIVE").notNull(), // 'ACTIVE' | 'SHADOW_LEARN' | 'DISABLED'
+  matchLogic: text("match_logic").default("AND").notNull(), // 'AND' (all rules must match) | 'OR' (any rule matches)
   actionOnMatch: policyActionEnum("action_on_match").default("BLOCK").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -136,18 +145,36 @@ export const executionLogs = pgTable("execution_logs", {
   orgId: text("org_id")
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
+
+  // Traceability & Origin Fields
   agentId: text("agent_id").notNull(),
+  userEmail: text("user_email"),
+  userName: text("user_name"),
+  clientIp: text("client_ip"),
+  clientHostname: text("client_hostname"),
+  sessionId: text("session_id"),
+
+  // Execution Context
   toolName: text("tool_name").notNull(),
   arguments: jsonb("arguments").notNull(),
   verdict: logVerdictEnum("verdict").notNull(),
   triggeredPolicyId: text("triggered_policy_id").references(() => policies.id, { onDelete: "set null" }),
+
+  // Streaming & Performance Telemetry
+  isStreaming: boolean("is_streaming").default(false),
+  timeToFirstTokenMs: integer("ttft_ms"),
+  totalTokens: integer("total_tokens"),
   latencyMs: integer("latency_ms").notNull(),
+
+  // Tamper-Evident Chaining & Compliance
   previousRecordHash: text("previous_record_hash"), // ISO 27001 A.8.15 Tamper-Evident Chaining
   recordHash: text("record_hash"),                 // SHA-256(id + prevHash + tool + verdict + ts)
   isPiiRedacted: text("is_pii_redacted").default("true").notNull(), // GDPR Art. 25 & DPDP Sec. 8
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (t) => [
-  index("exec_logs_org_created_idx").on(t.orgId, t.createdAt)
+  index("exec_logs_org_created_idx").on(t.orgId, t.createdAt),
+  index("exec_logs_user_email_idx").on(t.orgId, t.userEmail),
+  index("exec_logs_client_ip_idx").on(t.clientIp)
 ]);
 
 // 6. HITL Requests (Human Intervention Holds)
@@ -218,6 +245,51 @@ export const dlpPolicies = pgTable("dlp_policies", {
   index("dlp_policies_org_idx").on(t.orgId)
 ]);
 
+// 10. Custom & In-House LLM Provider Endpoints (Ollama, vLLM, LocalAI, TGI)
+export const upstreamProviders = pgTable("upstream_providers", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // e.g. "On-Prem Ollama Cluster", "vLLM Production"
+  providerType: text("provider_type").notNull(), // "OLLAMA" | "OPENAI_COMPATIBLE" | "ANTHROPIC" | "CUSTOM"
+  baseUrl: text("base_url").notNull(), // e.g. "http://10.0.0.50:11434" or "http://vllm.internal:8000"
+  authToken: text("auth_token"), // Optional encrypted key/bearer
+  isInternal: boolean("is_internal").default(true).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (t) => [
+  index("providers_org_idx").on(t.orgId)
+]);
+
+// 11. ML Policy Recommendations (Discovered guardrails from execution history)
+export const policyRecommendations = pgTable("policy_recommendations", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  targetTool: text("target_tool").notNull(),
+  fieldPath: text("field_path").notNull(),
+  suggestedOperator: text("suggested_operator").notNull(),
+  suggestedTargetValue: text("suggested_target_value").notNull(),
+  confidenceScore: doublePrecision("confidence_score").notNull(), // e.g. 0.98
+  reasoning: text("reasoning").notNull(),
+  sampleSize: integer("sample_size").notNull(),
+  status: text("status").default("PENDING").notNull(), // "PENDING" | "ACCEPTED" | "DISMISSED"
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (t) => [
+  index("recommendations_org_status_idx").on(t.orgId, t.status)
+]);
+
+// 12. Shadow Analytics Aggregates (Hourly rollups for fast charting)
+export const shadowMetrics = pgTable("shadow_metrics", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  policyId: text("policy_id").notNull(),
+  orgId: text("org_id").notNull(),
+  bucketHour: timestamp("bucket_hour", { withTimezone: true }).notNull(),
+  totalEvaluated: integer("total_evaluated").default(0).notNull(),
+  wouldHaveBlocked: integer("would_have_blocked").default(0).notNull(),
+  wouldHavePassed: integer("would_have_passed").default(0).notNull()
+}, (t) => [
+  index("shadow_metrics_policy_bucket_idx").on(t.policyId, t.bucketHour)
+]);
+
 // ============================================================================
 // Relations
 // ============================================================================
@@ -228,7 +300,10 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   executionLogs: many(executionLogs),
   subjectEncryptionKeys: many(subjectEncryptionKeys),
   rateLimitPolicies: many(rateLimitPolicies),
-  dlpPolicies: many(dlpPolicies)
+  dlpPolicies: many(dlpPolicies),
+  upstreamProviders: many(upstreamProviders),
+  policyRecommendations: many(policyRecommendations),
+  shadowMetrics: many(shadowMetrics)
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
@@ -290,6 +365,27 @@ export const rateLimitPoliciesRelations = relations(rateLimitPolicies, ({ one })
 export const dlpPoliciesRelations = relations(dlpPolicies, ({ one }) => ({
   organization: one(organizations, {
     fields: [dlpPolicies.orgId],
+    references: [organizations.id]
+  })
+}));
+
+export const upstreamProvidersRelations = relations(upstreamProviders, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [upstreamProviders.orgId],
+    references: [organizations.id]
+  })
+}));
+
+export const policyRecommendationsRelations = relations(policyRecommendations, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [policyRecommendations.orgId],
+    references: [organizations.id]
+  })
+}));
+
+export const shadowMetricsRelations = relations(shadowMetrics, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [shadowMetrics.orgId],
     references: [organizations.id]
   })
 }));

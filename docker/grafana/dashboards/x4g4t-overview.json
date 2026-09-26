@@ -48,7 +48,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "editorMode": "code",
-          "expr": "x4g4t_global_ai_lockdown_active",
+          "expr": "max(kill_switch_active_drop_engaged or x4g4t_global_ai_lockdown_active or vector(0))",
           "legendFormat": "Global AI Killswitch",
           "range": true,
           "refId": "A"
@@ -87,7 +87,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "x4g4t_policy_freeze_active",
+          "expr": "max(x4g4t_policy_freeze_active or vector(0))",
           "legendFormat": "Policy Freeze",
           "refId": "A"
         }
@@ -123,7 +123,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "hitl_requests_total",
+          "expr": "sum(hitl_requests_total) or vector(0)",
           "legendFormat": "Total HITL Holds",
           "refId": "A"
         }
@@ -472,7 +472,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "x4g4t_database_connected",
+          "expr": "min(x4g4t_database_connected or vector(1))",
           "legendFormat": "PostgreSQL Health",
           "refId": "A"
         }
@@ -509,7 +509,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "x4g4t_redis_connected",
+          "expr": "min(x4g4t_redis_connected or vector(1))",
           "legendFormat": "Redis Health",
           "refId": "A"
         }
@@ -597,13 +597,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "process_resident_memory_bytes",
+          "expr": "process_resident_memory_bytes{job=\"x4g4t-proxy\"}",
           "legendFormat": "RSS Memory",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "process_heap_used_bytes",
+          "expr": "process_heap_used_bytes{job=\"x4g4t-proxy\"}",
           "legendFormat": "Heap Used",
           "refId": "B"
         }

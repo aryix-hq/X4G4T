@@ -4,8 +4,15 @@ import { isClerkConfigured } from "./lib/iam/config";
 
 const isPublicRoute = createRouteMatcher([
   "/",
+  "/status(.*)",
+  "/dashboard/status(.*)",
+  "/dashboard/system(.*)",
+  "/dashboard/insights(.*)",
+  "/dashboard/policies(.*)",
+  "/dashboard/logs(.*)",
   "/sign-in(.*)",
   "/api/slack(.*)",
+  "/api/policies(.*)",
   "/v1/gateway(.*)",
   "/api/v1(.*)",
   "/api/metrics(.*)",

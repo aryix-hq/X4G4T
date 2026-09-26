@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-ml-service
+  namespace: x4g4t
+  labels:
+    app: x4g4t-ml-service
+    app.kubernetes.io/name: x4g4t-ml-service
+    app.kubernetes.io/part-of: x4g4t-platform
+    app.kubernetes.io/component: intelligence-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: x4g4t-ml-service
+  template:
+    metadata:
+      labels:
+        app: x4g4t-ml-service
+        app.kubernetes.io/name: x4g4t-ml-service
+        app.kubernetes.io/component: intelligence-plane
+    spec:
+      containers:
+        - name: ml-service
+          image: ghcr.io/aryix-hq/x4g4t-proxy:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "apps/proxy/dist/ml-server.js"]
+          ports:
+            - containerPort: 5001
+              name: http
+          env:
+            - name: PORT
+              value: "5001"
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - configMapRef:
+                name: x4g4t-config
+            - secretRef:
+                name: x4g4t-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x4g4t-ml-service
+  namespace: x4g4t
+  labels:
+    app: x4g4t-ml-service
+    app.kubernetes.io/name: x4g4t-ml-service
+    app.kubernetes.io/part-of: x4g4t-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5001
+      targetPort: 5001
+      name: http
+      protocol: TCP
+  selector:
+    app: x4g4t-ml-service
+

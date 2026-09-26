@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: x4g4t-mongodb
+  namespace: x4g4t
+  labels:
+    app.kubernetes.io/name: x4g4t-mongodb
+spec:
+  serviceName: mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: x4g4t-mongodb
+  template:
+    metadata:
+      labels:
+        app: x4g4t-mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:6.0-alpine
+          ports:
+            - name: mongodb
+              containerPort: 27017
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: mongo-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: x4g4t
+spec:
+  type: ClusterIP
+  selector:
+    app: x4g4t-mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x4g4t-graylog
+  namespace: x4g4t
+  labels:
+    app.kubernetes.io/name: x4g4t-graylog
+    app.kubernetes.io/part-of: x4g4t-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: x4g4t-graylog
+  template:
+    metadata:
+      labels:
+        app: x4g4t-graylog
+    spec:
+      containers:
+        - name: graylog
+          image: graylog/graylog:6.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: web
+              containerPort: 9000
+            - name: gelf-udp
+              containerPort: 12201
+              protocol: UDP
+            - name: gelf-tcp
+              containerPort: 12201
+              protocol: TCP
+          env:
+            - name: GRAYLOG_PASSWORD_SECRET
+              value: "somepasswordpeppersecretatleast16characters"
+            - name: GRAYLOG_ROOT_PASSWORD_SHA2
+              value: "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+            - name: GRAYLOG_HTTP_BIND_ADDRESS
+              value: "0.0.0.0:9000"
+            - name: GRAYLOG_ELASTICSEARCH_HOSTS
+              value: "http://x4g4t-elasticsearch:9200"
+            - name: GRAYLOG_MONGODB_URI
+              value: "mongodb://mongodb:27017/graylog"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1024Mi
+            limits:
+              cpu: 2000m
+              memory: 2048Mi
+          readinessProbe:
+            httpGet:
+              path: /api/system/lbstatus
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/system/lbstatus
+              port: 9000
+            initialDelaySeconds: 45
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graylog
+  namespace: x4g4t
+  labels:
+    app.kubernetes.io/name: x4g4t-graylog
+spec:
+  type: ClusterIP
+  selector:
+    app: x4g4t-graylog
+  ports:
+    - name: web
+      port: 9000
+      targetPort: 9000
+    - name: gelf-udp
+      port: 12201
+      targetPort: 12201
+      protocol: UDP
+    - name: gelf-tcp
+      port: 12201
+      targetPort: 12201
+      protocol: TCP

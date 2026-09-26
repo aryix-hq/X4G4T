@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: x4g4t-graylog-forwarder
+  namespace: x4g4t
+  labels:
+    app.kubernetes.io/name: x4g4t-graylog-forwarder
+    app.kubernetes.io/part-of: x4g4t-platform
+spec:
+  selector:
+    matchLabels:
+      app: x4g4t-graylog-forwarder
+  template:
+    metadata:
+      labels:
+        app: x4g4t-graylog-forwarder
+    spec:
+      containers:
+        - name: graylog-forwarder
+          image: ghcr.io/aryix-hq/x4g4t-graylog-forwarder:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          ports:
+            - name: http
+              containerPort: 5150
+          env:
+            - name: PORT
+              value: "5150"
+            - name: GRAYLOG_HOST
+              value: "graylog.x4g4t.svc.cluster.local"
+            - name: GRAYLOG_PORT
+              value: "12201"
+            - name: DOCKER_SOCKET
+              value: "/var/run/docker.sock"
+          volumeMounts:
+            - name: dockersock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5150
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5150
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: dockersock
+          hostPath:
+            path: /var/run/docker.sock
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graylog-forwarder
+  namespace: x4g4t
+  labels:
+    app.kubernetes.io/name: x4g4t-graylog-forwarder
+spec:
+  type: ClusterIP
+  selector:
+    app: x4g4t-graylog-forwarder
+  ports:
+    - name: http
+      port: 5150
+      targetPort: 5150

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { UserProfileButton } from "@/components/user-profile-button";
-import { ShieldAlert, Key, FileCheck, Activity, BookOpen, UserCheck, AlertOctagon } from "lucide-react";
+import { ShieldAlert, Key, FileCheck, Activity, BookOpen, UserCheck, Sparkles, Server, Cpu } from "lucide-react";
 import { getTenantContext } from "@/lib/tenant";
 import { isClerkConfigured } from "@/lib/iam/config";
 import { DashboardFooter } from "./dashboard-footer";
-import { getGlobalAiLockdownDetails } from "@x4g4t/policy-engine";
+import { KillSwitchBanner } from "@/components/kill-switch-banner";
+import { TwoFactorEnrollmentTrigger } from "@/components/two-factor-enrollment-trigger";
+import { getEmergencyKillSwitchAction } from "@/app/actions";
 
 export default async function DashboardLayout({
   children
@@ -13,21 +15,17 @@ export default async function DashboardLayout({
 }) {
   const { orgName, role } = await getTenantContext();
   const clerkActive = isClerkConfigured();
-  const lockdown = getGlobalAiLockdownDetails();
+  const killSwitch = await getEmergencyKillSwitchAction();
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 font-sans flex-col">
-      {/* Emergency Global AI Lockdown Banner */}
-      {lockdown.active && (
-        <div className="bg-rose-600 text-white px-4 py-2.5 flex items-center justify-between text-xs font-semibold shadow-md animate-pulse z-50">
-          <div className="flex items-center gap-2.5 mx-auto">
-            <AlertOctagon className="h-4 w-4 shrink-0" />
-            <span>
-              EMERGENCY AI LOCKDOWN ACTIVE: All autonomous agent tool executions and proxy calls are blocked enterprise-wide (HTTP 503). Reason: &quot;{lockdown.reason}&quot;
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Master 2FA Emergency Kill Switch Sticky Banner */}
+      <KillSwitchBanner
+        initialActive={killSwitch.active}
+        initialReason={killSwitch.reason}
+        activatedAt={killSwitch.activatedAt}
+        role={role}
+      />
 
       <div className="flex flex-1">
         {/* Sidebar Navigation */}
@@ -44,7 +42,7 @@ export default async function DashboardLayout({
                 <div className="text-xs text-slate-400 truncate w-36" title={orgName}>
                   {orgName}
                 </div>
-                <div className="mt-1">
+                <div className="mt-1.5 flex items-center gap-1.5">
                   <span
                     className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-mono font-bold tracking-wider border ${
                       role === "admin"
@@ -54,6 +52,7 @@ export default async function DashboardLayout({
                   >
                     Role: {role}
                   </span>
+                  <TwoFactorEnrollmentTrigger variant="badge" />
                 </div>
               </div>
             </div>
@@ -77,6 +76,14 @@ export default async function DashboardLayout({
                       <FileCheck className="h-4 w-4 text-slate-400 group-hover:text-indigo-400 transition" />
                       Guardrail Policies
                     </div>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/insights"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition group"
+                  >
+                    <Sparkles className="h-4 w-4 text-purple-400 group-hover:text-purple-300 transition" />
+                    AI Insights & ML Rules
                   </Link>
 
                   <Link
@@ -104,6 +111,14 @@ export default async function DashboardLayout({
                   </Link>
 
                   <Link
+                    href="/dashboard/system"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <Server className="h-4 w-4 text-emerald-400" />
+                    System Health &amp; Telemetry
+                  </Link>
+
+                  <Link
                     href="/dashboard/docs"
                     className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition"
                   >
@@ -122,6 +137,38 @@ export default async function DashboardLayout({
                   </Link>
 
                   <Link
+                    href="/dashboard/policies"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <FileCheck className="h-4 w-4 text-indigo-400" />
+                    Guardrail Policies
+                  </Link>
+
+                  <Link
+                    href="/dashboard/insights"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition group"
+                  >
+                    <Sparkles className="h-4 w-4 text-purple-400 group-hover:text-purple-300 transition" />
+                    AI Insights & ML Rules
+                  </Link>
+
+                  <Link
+                    href="/dashboard/status"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <Server className="h-4 w-4 text-emerald-400" />
+                    System Status & Health
+                  </Link>
+
+                  <Link
+                    href="/dashboard/system"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <Cpu className="h-4 w-4 text-cyan-400" />
+                    Dynamic Telemetry
+                  </Link>
+
+                  <Link
                     href="/dashboard/docs"
                     className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition"
                   >
@@ -133,15 +180,19 @@ export default async function DashboardLayout({
             </nav>
           </div>
 
-          <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-mono">v0.1.0-alpha</span>
-            {clerkActive ? (
-              <UserProfileButton />
-            ) : (
-              <div className="h-7 w-7 rounded-full bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-xs font-semibold text-indigo-300">
-                {orgName?.charAt(0)?.toUpperCase() || "A"}
-              </div>
-            )}
+          <div className="pt-4 border-t border-slate-800/80 space-y-3">
+            <TwoFactorEnrollmentTrigger variant="card" />
+
+            <div className="flex items-center justify-between text-xs text-slate-500 font-mono pt-1">
+              <span>v0.1.0-alpha</span>
+              {clerkActive ? (
+                <UserProfileButton />
+              ) : (
+                <div className="h-6 w-6 rounded-full bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-[10px] font-semibold text-indigo-300">
+                  {orgName?.charAt(0)?.toUpperCase() || "A"}
+                </div>
+              )}
+            </div>
           </div>
         </aside>
 

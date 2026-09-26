@@ -45,8 +45,14 @@ async function bootstrap() {
       DO $$ BEGIN
         CREATE TYPE rule_operator AS ENUM (
           'EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN',
-          'GREATER_THAN_OR_EQUAL', 'LESS_THAN_OR_EQUAL', 'CONTAINS', 'REGEX', 'IN'
+          'GREATER_THAN_OR_EQUAL', 'LESS_THAN_OR_EQUAL', 'CONTAINS', 'REGEX', 'IN', 'CIDR_MATCH'
         );
+      EXCEPTION WHEN duplicate_object THEN null;
+      END $$;
+    `;
+    await sql`
+      DO $$ BEGIN
+        ALTER TYPE rule_operator ADD VALUE IF NOT EXISTS 'CIDR_MATCH';
       EXCEPTION WHEN duplicate_object THEN null;
       END $$;
     `;
@@ -164,7 +170,65 @@ async function bootstrap() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS subject_keys_org_subject_idx ON subject_encryption_keys(org_id, subject_id);
     `;
-    console.log("✅ All 7 tables and strategic indexes verified.");
+
+    // Alter organizations & policies for enterprise extensions
+    await sql`
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS kill_switch_active BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS kill_switch_activated_at TIMESTAMPTZ;
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS kill_switch_reason TEXT;
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS kill_switch_two_factor_secret TEXT;
+      ALTER TABLE policies ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'ACTIVE';
+    `;
+
+    // 10. Upstream Providers (Ollama, vLLM, Custom)
+    await sql`
+      CREATE TABLE IF NOT EXISTS upstream_providers (
+        id TEXT PRIMARY KEY,
+        org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        provider_type TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        auth_token TEXT,
+        is_internal BOOLEAN NOT NULL DEFAULT true,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS providers_org_idx ON upstream_providers(org_id);
+    `;
+
+    // 11. Policy Recommendations (ML Discoveries)
+    await sql`
+      CREATE TABLE IF NOT EXISTS policy_recommendations (
+        id TEXT PRIMARY KEY,
+        org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        target_tool TEXT NOT NULL,
+        field_path TEXT NOT NULL,
+        suggested_operator TEXT NOT NULL,
+        suggested_target_value TEXT NOT NULL,
+        confidence_score DOUBLE PRECISION NOT NULL,
+        reasoning TEXT NOT NULL,
+        sample_size INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS recommendations_org_status_idx ON policy_recommendations(org_id, status);
+    `;
+
+    // 12. Shadow Metrics
+    await sql`
+      CREATE TABLE IF NOT EXISTS shadow_metrics (
+        id TEXT PRIMARY KEY,
+        policy_id TEXT NOT NULL,
+        org_id TEXT NOT NULL,
+        bucket_hour TIMESTAMPTZ NOT NULL,
+        total_evaluated INTEGER NOT NULL DEFAULT 0,
+        would_have_blocked INTEGER NOT NULL DEFAULT 0,
+        would_have_passed INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS shadow_metrics_policy_bucket_idx ON shadow_metrics(policy_id, bucket_hour);
+    `;
+
+    console.log("✅ All relational tables, enterprise extensions, and strategic indexes verified.");
 
     // 4. Seed Default Organization
     console.log("\n🌱 Seeding Default Organization & Baseline Guardrails...");

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/tenant";
 import { hitlRequests } from "@x4g4t/db";
 import { eq } from "drizzle-orm";
+import crypto from "node:crypto";
 
 interface SlackPayloadAction {
   value?: string;
@@ -18,17 +19,76 @@ interface SlackInteractivePayload {
   user?: SlackPayloadUser;
 }
 
-export async function POST(req: NextRequest) {
-  let rawPayload: string | null = null;
+/**
+ * Cryptographically verifies Slack webhook request signatures using HMAC-SHA256
+ * and validates request timestamp freshness to prevent replay attacks.
+ */
+function verifySlackRequestSignature(
+  signature: string | null,
+  timestamp: string | null,
+  rawBody: string,
+  signingSecret: string
+): { isValid: boolean; error?: string } {
+  if (!signature || !timestamp) {
+    return { isValid: false, error: "Missing Slack signature or timestamp headers" };
+  }
+
+  // Prevent replay attacks (5 minute threshold)
+  const currentTimestamp = Math.floor(Date.now() / 1000);
+  const requestTimestamp = parseInt(timestamp, 10);
+  if (isNaN(requestTimestamp) || Math.abs(currentTimestamp - requestTimestamp) > 300) {
+    return { isValid: false, error: "Slack request timestamp is stale (replay attack mitigation)" };
+  }
+
+  const sigBaseString = `v0:${timestamp}:${rawBody}`;
+  const computedSignature = "v0=" + crypto
+    .createHmac("sha256", signingSecret)
+    .update(sigBaseString, "utf8")
+    .digest("hex");
 
   try {
-    const contentType = req.headers.get("content-type") || "";
+    const isMatch = crypto.timingSafeEqual(
+      Buffer.from(computedSignature, "utf8"),
+      Buffer.from(signature, "utf8")
+    );
+    return { isValid: isMatch };
+  } catch {
+    return { isValid: false, error: "Signature comparison mismatch" };
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+  const slackSignature = req.headers.get("x-slack-signature");
+  const slackTimestamp = req.headers.get("x-slack-request-timestamp");
+  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+
+  // Enforce cryptographic signature verification when corporate signing secret is configured
+  if (signingSecret) {
+    const verification = verifySlackRequestSignature(
+      slackSignature,
+      slackTimestamp,
+      rawBody,
+      signingSecret
+    );
+    if (!verification.isValid) {
+      return NextResponse.json(
+        { error: "Unauthorized: Invalid Slack webhook signature", details: verification.error },
+        { status: 401 }
+      );
+    }
+  }
+
+  let rawPayload: string | null = null;
+  const contentType = req.headers.get("content-type") || "";
+
+  try {
     if (contentType.includes("application/json")) {
-      const jsonBody = await req.json();
+      const jsonBody = JSON.parse(rawBody);
       rawPayload = typeof jsonBody.payload === "string" ? jsonBody.payload : JSON.stringify(jsonBody);
     } else {
-      const formData = await req.formData();
-      rawPayload = formData.get("payload") as string | null;
+      const searchParams = new URLSearchParams(rawBody);
+      rawPayload = searchParams.get("payload");
     }
   } catch (err) {
     return NextResponse.json({ error: "Invalid request payload format" }, { status: 400 });
@@ -96,4 +156,3 @@ export async function POST(req: NextRequest) {
     ]
   });
 }
-

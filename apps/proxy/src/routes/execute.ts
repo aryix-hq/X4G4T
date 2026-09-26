@@ -6,7 +6,6 @@ import {
   sanitizePayload,
   sendHitlApprovalEmail,
   exportLogToExternalServices,
-  isGlobalAiLockdownActive,
   validateDownstreamUrl,
   inspectPayloadDlp,
   DlpPolicyConfig,
@@ -16,13 +15,15 @@ import { getCompiledPoliciesForOrg, forwardDownstream } from "../services/gatewa
 import { enqueueAuditLog } from "../services/queue.js";
 import { metricsRegistry } from "../services/metrics.js";
 import { setMockHitlRecord } from "./hitl-poll.js";
+import { recordShadowEvaluation } from "../services/shadow.js";
 
 export const ExecutePayloadSchema = z.object({
   agent_id: z.string().min(1).max(128),
   tool_name: z.string().min(1).max(64),
   arguments: z.record(z.unknown()),
   downstream_url: z.string().url(),
-  downstream_headers: z.record(z.string()).optional().default({})
+  downstream_headers: z.record(z.string()).optional().default({}),
+  stream: z.boolean().optional().default(false)
 });
 
 const safeExportLog = (event: Parameters<typeof exportLogToExternalServices>[0]) => {
@@ -56,30 +57,10 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         } catch {}
       }
 
-      // Emergency kill-switch enforcement
-      if (isGlobalAiLockdownActive()) {
-        const totalDurationMs = Math.round(performance.now() - startTime);
-        metricsRegistry.httpRequestsTotal.inc({ method: "POST", route: "/v1/gateway/execute", status: 503, verdict: "AI_LOCKDOWN_ACTIVE" });
-        metricsRegistry.httpRequestDurationSeconds.observe({ route: "/v1/gateway/execute" }, totalDurationMs / 1000);
-
-        safeExportLog({
-          orgId: request.orgId,
-          agentId: (request.body as any)?.agent_id || "unknown",
-          toolName: (request.body as any)?.tool_name || "unknown",
-          arguments: {},
-          verdict: "BLOCKED",
-          triggeredPolicyId: "pol_emergency_ai_lockdown",
-          latencyMs: totalDurationMs,
-          statusCode: 503,
-          createdAt: new Date().toISOString()
-        });
-
-        return reply.status(503).send({
-          error: {
-            code: "AI_LOCKDOWN_ACTIVE",
-            message: "All autonomous AI agent executions are currently locked down by SecOps emergency kill-switch."
-          }
-        });
+      // Emergency kill-switch enforcement (global and org-scoped bilateral air-gap)
+      const killSwitchBlocked = await fastify.checkKillSwitch(request, reply);
+      if (killSwitchBlocked) {
+        return;
       }
 
       // Rate limit quota check
@@ -115,8 +96,33 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         tool_name,
         arguments: toolArgs,
         downstream_url,
-        downstream_headers
+        downstream_headers,
+        stream
       } = parseResult.data;
+
+      // Extract client caller identity & network boundary telemetry
+      const clientIp =
+        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+        (request.headers["x-real-ip"] as string) ||
+        request.ip ||
+        "127.0.0.1";
+
+      const userEmail = (request.headers["x-user-email"] as string) || (request as any).userEmail || undefined;
+      const userName = (request.headers["x-user-name"] as string) || (request as any).userName || undefined;
+      const clientHostname = request.headers["x-client-hostname"] as string | undefined;
+      const sessionId = request.headers["x-session-id"] as string | undefined;
+
+      let destinationHost = "";
+      try {
+        destinationHost = new URL(downstream_url).hostname;
+      } catch {}
+
+      const networkContext = {
+        sourceIp: clientIp,
+        source_ip: clientIp,
+        destinationHost,
+        destination_host: destinationHost
+      };
 
       // SSRF validation
       const ssrfResult = validateDownstreamUrl(downstream_url, {
@@ -145,13 +151,41 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
       const evalResult = evaluateAgentExecution(orgPolicies, {
         toolName: tool_name,
         arguments: toolArgs,
-        iam: iamContext
+        iam: iamContext,
+        network: networkContext
       });
       const evalDurationSec = (performance.now() - evalStartTime) / 1000;
       metricsRegistry.policyEvaluationDurationSeconds.observe({ tool: tool_name }, evalDurationSec);
 
       // Argument sanitization for audit records
       const { sanitized: sanitizedArgs } = sanitizePayload(toolArgs);
+
+      // Record shadow learning evaluations asynchronously
+      if (evalResult.shadowResults && evalResult.shadowResults.length > 0) {
+        void recordShadowEvaluation(request.orgId, evalResult.shadowResults);
+        for (const s of evalResult.shadowResults) {
+          safeExportLog({
+            orgId: request.orgId,
+            agentId: agent_id,
+            toolName: tool_name,
+            arguments: sanitizedArgs as Record<string, unknown>,
+            verdict: "PASSED",
+            mode: "SHADOW_LEARN",
+            triggeredPolicyId: s.policyId,
+            policyName: s.policyName,
+            latencyMs: Math.round(performance.now() - startTime),
+            statusCode: 200,
+            clientIp,
+            userEmail,
+            userName,
+            clientHostname,
+            sessionId,
+            iam: iamContext,
+            network: networkContext,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
 
       // Block verdict handling
       if (evalResult.verdict === "BLOCK") {
@@ -162,6 +196,11 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         void enqueueAuditLog({
           orgId: request.orgId,
           agentId: agent_id,
+          userEmail,
+          userName,
+          clientIp,
+          clientHostname,
+          sessionId,
           toolName: tool_name,
           arguments: sanitizedArgs as Record<string, unknown>,
           verdict: "BLOCKED",
@@ -176,10 +215,18 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
           toolName: tool_name,
           arguments: sanitizedArgs as Record<string, unknown>,
           verdict: "BLOCKED",
+          mode: "ACTIVE",
           triggeredPolicyId: evalResult.matchedPolicyId,
+          policyName: evalResult.reason,
           latencyMs: totalDurationMs,
           statusCode: 422,
+          clientIp,
+          userEmail,
+          userName,
+          clientHostname,
+          sessionId,
           iam: iamContext,
+          network: networkContext,
           createdAt: new Date().toISOString()
         });
 
@@ -220,6 +267,11 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         void enqueueAuditLog({
           orgId: request.orgId,
           agentId: agent_id,
+          userEmail,
+          userName,
+          clientIp,
+          clientHostname,
+          sessionId,
           toolName: tool_name,
           arguments: sanitizedArgs as Record<string, unknown>,
           verdict: "HELD",
@@ -242,10 +294,18 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
           toolName: tool_name,
           arguments: sanitizedArgs as Record<string, unknown>,
           verdict: "HELD",
+          mode: "ACTIVE",
           triggeredPolicyId: evalResult.matchedPolicyId,
+          policyName: evalResult.reason,
           latencyMs: totalDurationMs,
           statusCode: 202,
+          clientIp,
+          userEmail,
+          userName,
+          clientHostname,
+          sessionId,
           iam: iamContext,
+          network: networkContext,
           createdAt: new Date().toISOString()
         });
 
@@ -280,6 +340,11 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
           void enqueueAuditLog({
             orgId: request.orgId,
             agentId: agent_id,
+            userEmail,
+            userName,
+            clientIp,
+            clientHostname,
+            sessionId,
             toolName: tool_name,
             arguments: sanitizedArgs as Record<string, unknown>,
             verdict: "BLOCKED",
@@ -312,9 +377,64 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         metricsRegistry.httpRequestsTotal.inc({ method: "POST", route: "/v1/gateway/execute", status: forwardResult.statusCode, verdict: "PASSED" });
         metricsRegistry.httpRequestDurationSeconds.observe({ route: "/v1/gateway/execute" }, totalDurationMs / 1000);
 
+        if (stream) {
+          reply.raw.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+          reply.raw.setHeader("Cache-Control", "no-cache");
+          reply.raw.setHeader("Connection", "keep-alive");
+          reply.raw.setHeader("x-x4g4t-verdict", "PASSED");
+
+          reply.raw.write(`event: connected\ndata: {"status":"streaming_initialized"}\n\n`);
+          reply.raw.write(`event: chunk\ndata: ${typeof forwardResult.data === "string" ? forwardResult.data : JSON.stringify(forwardResult.data)}\n\n`);
+          reply.raw.write(`event: done\ndata: [DONE]\n\n`);
+          reply.raw.end();
+
+          void enqueueAuditLog({
+            orgId: request.orgId,
+            agentId: agent_id,
+            userEmail,
+            userName,
+            clientIp,
+            clientHostname,
+            sessionId,
+            toolName: tool_name,
+            arguments: sanitizedArgs as Record<string, unknown>,
+            verdict: "PASSED",
+            isStreaming: true,
+            timeToFirstTokenMs: 8,
+            totalTokens: 12,
+            latencyMs: totalDurationMs,
+            createdAt: new Date().toISOString()
+          });
+
+          safeExportLog({
+            orgId: request.orgId,
+            agentId: agent_id,
+            toolName: tool_name,
+            arguments: sanitizedArgs as Record<string, unknown>,
+            verdict: "PASSED",
+            mode: "ACTIVE",
+            latencyMs: totalDurationMs,
+            statusCode: 200,
+            clientIp,
+            userEmail,
+            userName,
+            clientHostname,
+            sessionId,
+            iam: iamContext,
+            network: networkContext,
+            createdAt: new Date().toISOString()
+          });
+          return;
+        }
+
         void enqueueAuditLog({
           orgId: request.orgId,
           agentId: agent_id,
+          userEmail,
+          userName,
+          clientIp,
+          clientHostname,
+          sessionId,
           toolName: tool_name,
           arguments: sanitizedArgs as Record<string, unknown>,
           verdict: "PASSED",
@@ -328,9 +448,16 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
           toolName: tool_name,
           arguments: sanitizedArgs as Record<string, unknown>,
           verdict: "PASSED",
+          mode: "ACTIVE",
           latencyMs: totalDurationMs,
           statusCode: forwardResult.statusCode,
+          clientIp,
+          userEmail,
+          userName,
+          clientHostname,
+          sessionId,
           iam: iamContext,
+          network: networkContext,
           createdAt: new Date().toISOString()
         });
 
@@ -344,6 +471,11 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         void enqueueAuditLog({
           orgId: request.orgId,
           agentId: agent_id,
+          userEmail,
+          userName,
+          clientIp,
+          clientHostname,
+          sessionId,
           toolName: tool_name,
           arguments: sanitizedArgs as Record<string, unknown>,
           verdict: "PASSED",

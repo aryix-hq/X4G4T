@@ -16,9 +16,37 @@
 
 *Sub-millisecond runtime policy enforcement, zero-trust LLM credential substitution, in-flight DLP redaction, SSRF protection, sliding-window rate limiting, and tamper-evident audit logging for autonomous agents and MCP servers.*
 
-[Quickstart](#-30-second-turn-key-quickstart) • [Architecture](#-architecture) • [Features](#-core-capabilities) • [Troubleshooting Recipes](#-common-troubleshooting-recipes--technical-query-index) • [Kubernetes](#-kubernetes-deployment) • [Observability](#-observability--telemetry) • [Docs](docs/) • [Contributing](CONTRIBUTING.md)
+[Quickstart](#-3-minute-quickstart) • [How It Works](docs/HOW_IT_WORKS.md) • [Policy Guide](docs/POLICY_GUIDE.md) • [Connect Tools](docs/CONNECTING_YOUR_TOOLS.md) • [Architecture](#-architecture--visual-flow) • [Features](#-core-capabilities) • [Docs](docs/) • [Contributing](CONTRIBUTING.md)
 
 </div>
+
+---
+
+> ### 🧸 In Plain English (The 10-Year-Old Explanation):
+> Imagine you have a super-smart robot assistant, but you don't want it accidentally spending your money, deleting your homework, or sharing your secret passwords. **X4G4T is the invisible safety shield** that watches every single tool your robot tries to use and stops bad mistakes before they can ever happen.
+
+---
+
+## 🌟 The Top 5 Things X4G4T Does For You
+
+1. **🛡️ The Airport Security Scanner (Policy Firewall)**: Evaluates every tool action your AI assistant takes (running bash scripts, calling external APIs, executing database queries) in **< 0.2ms** ($<200\,\mu\text{s}$) and blocks dangerous commands instantly.
+2. **🔒 The VIP Badge & Secret Vault (Zero-Trust Key Injection)**: Your AI agents only hold safe dummy tokens. X4G4T automatically swaps in real master production keys at the edge so rogue prompts can never steal or leak your cloud credentials.
+3. **✍️ The Blackout Marker (Data Loss Prevention / DLP)**: Automatically detects and blacks out customer credit cards, Social Security numbers, and passwords before an AI can send or expose them.
+4. **👥 The Manager's Signature (Human-in-the-Loop Approvals)**: If an agent tries to do something risky—like refunding over \$500 or deleting a record—X4G4T halts execution and pings your Slack channel with an interactive 1-click **Approve** button.
+5. **🚨 The Building Circuit Breaker (Emergency Global Kill-Switch)**: If anything ever goes wrong or an active threat is detected, one click flips the global lockdown switch, freezing 100% of outbound AI agent actions enterprise-wide in **0.00ms**.
+
+---
+
+## ⚖️ Feature Comparison: Without X4G4T vs. With X4G4T
+
+| Agent Threat Vector | Without X4G4T (Raw Agent Access) | With X4G4T (Protected Runtime) |
+| :--- | :--- | :--- |
+| **Accidental Database Deletion** | Agent runs `DROP TABLE users;` $\rightarrow$ Production outage and data loss. | Blocked in **0.18ms** $\rightarrow$ Agent receives safety warning and self-corrects. |
+| **Cloud Credential Theft** | Prompt injection tricks agent into reading `.env` $\rightarrow$ Master keys leaked to web. | Agent only holds dummy key $\rightarrow$ Real keys safely locked inside gateway vault. |
+| **PII & Customer Data Exposure** | Customer credit cards or SSNs sent into third-party cloud LLMs. | DLP engine detects and redacts tokens in-flight with `[REDACTED_CC]`. |
+| **Runaway Billing & Loops** | Rogue agent loops through paid APIs overnight $\rightarrow$ \$10,000+ unexpected bill. | Sliding-window token buckets and rate-limits hard-cap traffic and enforce quotas. |
+| **High-Value Wire Transfers** | Agent autonomously executes irreversible financial or cloud infrastructure actions. | Put on **HOLD** $\rightarrow$ Manager notified on Slack $\rightarrow$ Requires human signature. |
+| **SOC 2 & ISO 27001 Auditing** | No unified log of what autonomous agents executed in production. | Every tool call cryptographically signed in a tamper-evident SHA-256 audit chain. |
 
 ---
 
@@ -36,70 +64,116 @@ Autonomous AI coding agents (Claude Code, Cursor, Windsurf, Devin), agentic fram
 
 ---
 
-## 🏛️ Architecture
+## 🏛️ Architecture & Visual Flow
 
 ```
-                               ┌────────────────────────────────────────────────────────┐
-                               │          X4G4T CENTRALIZED GATEWAY (:4000)          │
-    Polyglot AI Agents         │                                                        │       Downstream Targets
-  ┌─────────────────────────┐  │  ┌──────────────────────────────────────────────────┐  │     ┌───────────────────┐
-  │ Claude Code / Cursor    │  │  │ 1. Upstream LLM Key Vault & Egress Injection     │  │ ──► │ OpenAI / Anthropic│
-  └────────────┬────────────┘  │  │    (Agents use local keys; gateway injects real) │  │     │ Google Gemini     │
-               │               │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
-  ┌────────────┴────────────┐  │  │ 2. Sub-Millisecond AST Evaluator (<0.2ms)        │  │
-  │ LangChain / AutoGen     │ ─┼─►│    - Numerical bounds, regex, enum operators     │  │     ┌───────────────────┐
-  └────────────┬────────────┘  │  │    - IAM role/group permissions enforcement      │  │ ──► │ Stripe / Payments │
-               │               │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
-  ┌────────────┴────────────┐  │  │ 3. Enterprise DLP & SSRF Guards                  │  │
-  │ MCP Clients             │  │  │    - Luhn CC, SSN, Aadhaar, AWS key scrub        │  │     ┌───────────────────┐
-  │ (JSON-RPC tools/call)   │  │  │    - Cloud metadata (169.254.169.254) blocked    │  │ ──► │ PostgreSQL / SQL  │
-  └─────────────────────────┘  │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
-                               │  │ 4. Tamper-Evident Daily Audit Logging            │  │
-                               │  │    - Fire-and-forget Elasticsearch indexing      │  │     ┌───────────────────┐
-                               │  │    - Real-time Prometheus metrics exposition     │  │ ──► │ AWS / Kubernetes  │
-                               │  └────────────────────────┬─────────────────────────┘  │     └───────────────────┘
-                               └───────────────────────────┼────────────────────────────┘
-                                                           │
-                                                           ▼ (On REQUIRE_APPROVAL)
-                                                  ┌─────────────────┐
-                                                  │ Slack / Email   │
-                                                  │ HITL Sign-off   │
-                                                  └─────────────────┘
+                                ┌────────────────────────────────────────────────────────┐
+                                │          X4G4T CENTRALIZED GATEWAY (:4000)          │
+     Autonomous AI Agents       │                                                        │       Downstream Targets
+   ┌─────────────────────────┐  │  ┌──────────────────────────────────────────────────┐  │     ┌───────────────────┐
+   │ Cursor / Claude Code    │  │  │ 1. Upstream LLM Key Vault & Egress Injection     │  │ ──► │ OpenAI / Anthropic│
+   │ Windsurf / Cline / Roo  │  │  │    (Agents use local keys; gateway injects real) │  │     │ Google Gemini     │
+   └────────────┬────────────┘  │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
+                │               │  │ 2. Sub-Millisecond AST Evaluator (<0.2ms)        │  │
+   ┌────────────┴────────────┐  │  │    - Numerical bounds, regex, enum operators     │  │     ┌───────────────────┐
+   │ LangChain / AutoGen     │ ─┼─►│    - IAM role/group permissions enforcement      │  │ ──► │ Stripe / Payments │
+   └────────────┬────────────┘  │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
+                │               │  │ 3. Enterprise DLP & SSRF Guards                  │  │
+   ┌────────────┴────────────┐  │  │    - Luhn CC, SSN, Aadhaar, AWS key scrub        │  │     ┌───────────────────┐
+   │ MCP Clients             │  │  │    - Cloud metadata (169.254.169.254) blocked    │  │ ──► │ PostgreSQL / SQL  │
+   │ (JSON-RPC tools/call)   │  │  ├──────────────────────────────────────────────────┤  │     └───────────────────┘
+   └─────────────────────────┘  │  │ 4. Tamper-Evident Daily Audit Logging            │  │
+                                │  │    - Fire-and-forget Graylog/ES indexing         │  │     ┌───────────────────┐
+                                │  │    - Real-time Prometheus metrics exposition     │  │ ──► │ AWS / Kubernetes  │
+                                │  └────────────────────────┬─────────────────────────┘  │     └───────────────────┘
+                                └───────────────────────────┼────────────────────────────┘
+                                                            │
+                                                            ▼ (On REQUIRE_APPROVAL)
+                                                   ┌─────────────────┐
+                                                   │ Slack / Email   │
+                                                   │ HITL Sign-off   │
+                                                   └─────────────────┘
 ```
 
 ---
 
-## 🚀 30-Second Turn-Key Quickstart
+## 🚀 3-Minute Quickstart
 
-X4G4T ships with a complete, production-grade **Turn-Key Docker Compose Stack** including PostgreSQL, Redis, Elasticsearch, Prometheus, Grafana, Fastify Gateway, and Next.js Web UI.
+X4G4T ships with a complete, production-grade **Turn-Key Docker Compose Stack** including PostgreSQL, Redis, Elasticsearch/Graylog, Prometheus, Grafana, Fastify Gateway, and Next.js Web UI.
 
+### 1. Start the System
 ```bash
-# 1. Clone repository
+# Clone the repository
 git clone https://github.com/aryix-hq/X4G4T.git
 cd X4G4T
 
-# 2. Start all 7 services in detached mode
+# Start all services in detached mode
 docker compose up -d
 
-# 3. Verify health
+# Verify health
 docker compose ps
 ```
 
-### Access Endpoints
-| Component | Local URL | Default Credentials |
-| :--- | :--- | :--- |
-| **X4G4T Web Control Plane** | [http://localhost:3000](http://localhost:3000) | Instant Sandbox Mode (or Clerk SSO) |
-| **Fastify Proxy Gateway** | [http://localhost:4000](http://localhost:4000) | Header: `Authorization: Bearer sec_live_x4g4t_demo` |
-| **Grafana Observability** | [http://localhost:3001](http://localhost:3001) | Pre-authenticated Admin (`admin` / `admin`) |
-| **Prometheus Raw Metrics** | [http://localhost:9090](http://localhost:9090) | Scrapes `/metrics` every 5 seconds |
-| **Elasticsearch Cluster** | [http://localhost:9200](http://localhost:9200) | Daily index: `x4g4t-logs-YYYY.MM.DD` |
+### 2. Verify Your First Protected Request
+Run this `curl` command to test your new proxy firewall:
+```bash
+curl -X POST http://localhost:4000/v1/gateway/execute \
+  -H "Authorization: Bearer sec_live_x4g4t_demo" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "demo_agent_1",
+    "tool_name": "database_query",
+    "arguments": {
+      "query": "SELECT * FROM users LIMIT 5;"
+    }
+  }'
+```
+Expected response:
+```json
+{
+  "verdict": "ALLOW",
+  "latencyMs": 0,
+  "toolName": "database_query",
+  "message": "Tool execution passed all active policy guardrails."
+}
+```
+
+### 3. Access Endpoints
+| Component | Local URL | Default Credentials | Purpose |
+| :--- | :--- | :--- | :--- |
+| **X4G4T Web Control Plane** | [http://localhost:3000](http://localhost:3000) | Instant Sandbox Mode (or Clerk SSO) | Visual policy editor & live audit log |
+| **Fastify Proxy Gateway** | [http://localhost:4000](http://localhost:4000) | Header: `Authorization: Bearer sec_live_x4g4t_demo` | The inline agent firewall endpoint |
+| **Grafana Observability** | [http://localhost:3001](http://localhost:3001) | Pre-authenticated Admin (`admin` / `admin`) | 17 pre-built security & traffic panels |
+| **Prometheus Raw Metrics** | [http://localhost:9090](http://localhost:9090) | Scrapes `/metrics` every 5 seconds | Real-time prometheus telemetry |
+| **Graylog Search Engine** | [http://localhost:9000](http://localhost:9000) | Pre-configured Admin (`admin` / `admin`) | Compliance log retention & forensics |
 
 ### 📦 Pre-Built GitHub Container Registry (GHCR) Images
 Pre-built multi-architecture (`linux/amd64`, `linux/arm64`) images are published to GitHub Container Registry:
 ```bash
-# Pull pre-built images directly (no local compilation needed)
 docker pull ghcr.io/aryix-hq/x4g4t-proxy:latest
 docker pull ghcr.io/aryix-hq/x4g4t-web:latest
+```
+
+---
+
+## 🗺️ Codebase & Directory Roadmap
+
+```text
+├── apps/
+│   ├── proxy/              # The high-speed Fastify policy firewall (<0.2ms latency)
+│   ├── web/                # The Next.js 14 control plane dashboard & policy manager
+│   ├── aux-ops/            # Background worker for heavy reports & scheduled syncs
+│   ├── graylog-forwarder/  # High-throughput streaming forwarder for compliance logs
+│   └── client-simulator/  # Interactive CLI & drill simulator for chaos/load tests
+├── packages/
+│   ├── policy-engine/      # Pure TypeScript AST engine (zero-allocation evaluator & DLP)
+│   └── db/                 # Drizzle ORM schema, migrations, and PostgreSQL client
+├── docs/                   # Complete architecture, policy guides, and whitepapers
+│   ├── HOW_IT_WORKS.md     # Architecture and data flow for non-engineers
+│   ├── POLICY_GUIDE.md     # Real-world safety rules guide (refunds, SQL, DLP)
+│   └── CONNECTING_YOUR_TOOLS.md # Setup guide for Cursor, VS Code, Ollama, & LLMs
+├── docker/                 # Production Dockerfiles, Grafana dashboards, & init scripts
+└── k8s/                    # Enterprise Kubernetes deployment manifests & Helm charts
 ```
 
 ---
@@ -267,6 +341,15 @@ P99 Latency:        1.399ms
 ======================================================
 ```
 Full methodology and stress tests: [docs/PERFORMANCE_BENCHMARKS.md](docs/PERFORMANCE_BENCHMARKS.md).
+
+---
+
+## 📚 Plain-English Documentation Guides
+
+- 📘 [**How It Works (Architecture for Non-Engineers)**](docs/HOW_IT_WORKS.md) — Simple, step-by-step walkthrough of request lifecycles, service roles, and fail-closed defenses.
+- 📙 [**Policy Setup Guide**](docs/POLICY_GUIDE.md) — How to configure rules, thresholds, and Slack approvals with real-world examples.
+- 📗 [**Connecting Your Tools & IDEs**](docs/CONNECTING_YOUR_TOOLS.md) — 5-minute setup instructions for Cursor, Windsurf, VS Code, Ollama, and OpenAI/Anthropic.
+- 📕 [**System Architecture & Deep Dive**](docs/ARCHITECTURE.md) — Technical breakdown of AST compilation, ring buffers, and distributed caching.
 
 ---
 

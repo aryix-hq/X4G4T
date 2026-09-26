@@ -1,10 +1,14 @@
+import dgram from "node:dgram";
+
 export interface ExecutionLogEvent {
   orgId: string;
   agentId: string;
   toolName: string;
   arguments: Record<string, unknown>;
-  verdict: "PASSED" | "BLOCKED" | "HELD";
+  verdict: "PASSED" | "BLOCKED" | "HELD" | "STREAMING_ACTIVE";
   triggeredPolicyId?: string | null;
+  policyName?: string | null;
+  mode?: string;
   latencyMs: number;
   statusCode?: number;
   iam?: {
@@ -12,6 +16,18 @@ export interface ExecutionLogEvent {
     roles?: string[];
     groups?: string[];
   };
+  network?: {
+    sourceIp?: string;
+    source_ip?: string;
+    destinationHost?: string;
+    destination_host?: string;
+    [key: string]: unknown;
+  };
+  userEmail?: string;
+  userName?: string;
+  clientIp?: string;
+  clientHostname?: string;
+  sessionId?: string;
   recordHash?: string;
   createdAt: string;
 }
@@ -31,6 +47,66 @@ export interface ExternalLogStatus {
     configured: boolean;
     url?: string;
   };
+}
+
+let udpClient: dgram.Socket | null = null;
+function getUdpClient(): dgram.Socket {
+  if (!udpClient) {
+    udpClient = dgram.createSocket("udp4");
+    udpClient.unref?.();
+  }
+  return udpClient;
+}
+
+/**
+ * Dispatches a GELF 1.1 formatted log message over UDP to Graylog.
+ */
+export function sendGelfToGraylog(event: ExecutionLogEvent): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const graylogHost =
+        process.env.GRAYLOG_HOST ||
+        (process.env.NODE_ENV === "production" ? "graylog" : "127.0.0.1");
+      const graylogPort = Number(process.env.GRAYLOG_PORT) || 12201;
+      const client = getUdpClient();
+
+      const shortMsg = `[${event.agentId || "x4g4t-proxy"}] ${event.toolName} -> ${event.verdict} (${event.triggeredPolicyId || event.mode || "ACTIVE"})`;
+
+      const gelfPayload: Record<string, unknown> = {
+        version: "1.1",
+        host: process.env.HOSTNAME || "x4g4t-proxy",
+        short_message: shortMsg,
+        full_message: JSON.stringify(event),
+        timestamp: new Date(event.createdAt || Date.now()).getTime() / 1000,
+        level: event.verdict === "BLOCKED" ? 4 : 6,
+        _org_id: event.orgId,
+        _agent_id: event.agentId,
+        _tool_name: event.toolName,
+        _verdict: event.verdict,
+        _mode: event.mode || "ACTIVE",
+        _triggered_policy_id: event.triggeredPolicyId || undefined,
+        _policy_id: event.triggeredPolicyId || undefined,
+        _policy_name: event.policyName || undefined,
+        _client_ip:
+          event.clientIp ||
+          (event.network as any)?.source_ip ||
+          (event.network as any)?.sourceIp,
+        _user_email: event.userEmail,
+        _user_name: event.userName,
+        _latency_ms: event.latencyMs,
+        _status_code: event.statusCode,
+        _arguments: JSON.stringify(event.arguments || {})
+      };
+
+      const buf = Buffer.from(JSON.stringify(gelfPayload));
+      client.send(buf, graylogPort, graylogHost, (err) => {
+        if (err) resolve(false);
+        else resolve(true);
+      });
+    } catch {
+      resolve(false);
+    }
+  });
 }
 
 /**
@@ -76,16 +152,18 @@ export function getExternalLogStatus(): ExternalLogStatus {
 }
 
 /**
- * Dispatches an execution log event to external log providers (Elasticsearch, generic webhooks).
+ * Dispatches an execution log event to external log providers (Elasticsearch, generic webhooks, Graylog GELF UDP).
  * Pure fire-and-forget: does not block or add latency to the agent execution loop.
  */
 export async function exportLogToExternalServices(event: ExecutionLogEvent): Promise<{
   elasticsearchDispatched: boolean;
   webhookDispatched: boolean;
+  graylogDispatched: boolean;
 }> {
   const status = getExternalLogStatus();
   let elasticsearchDispatched = false;
   let webhookDispatched = false;
+  let graylogDispatched = false;
 
   const promises: Promise<unknown>[] = [];
 
@@ -160,10 +238,17 @@ export async function exportLogToExternalServices(event: ExecutionLogEvent): Pro
     );
   }
 
+  // 3. Graylog GELF UDP Real-Time Dispatch
+  promises.push(
+    sendGelfToGraylog(event).then((ok) => {
+      graylogDispatched = ok;
+    })
+  );
+
   if (promises.length > 0) {
     await Promise.allSettled(promises);
   }
 
-  return { elasticsearchDispatched, webhookDispatched };
+  return { elasticsearchDispatched, webhookDispatched, graylogDispatched };
 }
 

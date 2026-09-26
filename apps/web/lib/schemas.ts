@@ -4,6 +4,7 @@ export const PolicyFormSchema = z.object({
   name: z.string().min(1).max(64),
   targetTool: z.string().min(1).max(64),
   actionOnMatch: z.enum(["ALLOW", "BLOCK", "REQUIRE_APPROVAL"]),
+  mode: z.enum(["ACTIVE", "SHADOW_LEARN", "DISABLED"]).optional().default("ACTIVE"),
   fieldPath: z.string().min(1),
   operator: z.enum([
     "EQUALS",

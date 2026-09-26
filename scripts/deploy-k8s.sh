@@ -169,10 +169,22 @@ echo -e "${BOLD}[Step 6/7] Deploying Fastify AI Gateway (:4000) & Next.js Contro
 if [ "$DRY_RUN" = true ]; then
   echo -e "  • [Dry-Run] Validating $K8S_DIR/08-proxy.yaml"
   echo -e "  • [Dry-Run] Validating $K8S_DIR/09-web.yaml"
+  echo -e "  • [Dry-Run] Validating $K8S_DIR/11-ml-service.yaml"
+  echo -e "  • [Dry-Run] Validating $K8S_DIR/12-aux-ops.yaml"
+  echo -e "  • [Dry-Run] Validating $K8S_DIR/13-kafka.yaml"
+  echo -e "  • [Dry-Run] Validating $K8S_DIR/14-graylog.yaml"
+  echo -e "  • [Dry-Run] Validating $K8S_DIR/15-graylog-forwarder.yaml"
+  echo -e "  • [Dry-Run] Validating $K8S_DIR/16-client-simulator.yaml"
 else
   kubectl apply -f "$K8S_DIR/08-proxy.yaml"
   kubectl apply -f "$K8S_DIR/09-web.yaml"
-  echo -e "${GREEN}✓ X4G4T Gateway and Web Control Plane deployed.${NC}"
+  kubectl apply -f "$K8S_DIR/11-ml-service.yaml"
+  kubectl apply -f "$K8S_DIR/12-aux-ops.yaml"
+  kubectl apply -f "$K8S_DIR/13-kafka.yaml"
+  kubectl apply -f "$K8S_DIR/14-graylog.yaml"
+  kubectl apply -f "$K8S_DIR/15-graylog-forwarder.yaml"
+  kubectl apply -f "$K8S_DIR/16-client-simulator.yaml"
+  echo -e "${GREEN}✓ X4G4T Gateway, Web Control Plane, ML Intelligence Service, Aux-Ops, Kafka, Graylog, Forwarder Sidecar, and Client Simulator deployed.${NC}"
 fi
 
 # ----------------------------------------------------------------------------
@@ -210,7 +222,7 @@ echo -e "${CYAN}                   Deployment Summary & Verification            
 echo -e "${CYAN}======================================================================${NC}"
 
 if [ "$DRY_RUN" = true ]; then
-  echo -e "${GREEN}✓ All 11 Kubernetes manifests validated successfully client-side!${NC}"
+  echo -e "${GREEN}✓ All 16 Kubernetes manifests validated successfully client-side!${NC}"
   echo -e "${GREEN}✓ KeyVault & Secret Manager schemas verified.${NC}"
   echo -e "${GREEN}✓ CoreDNS transparent proxy rewrites verified.${NC}"
   echo ""

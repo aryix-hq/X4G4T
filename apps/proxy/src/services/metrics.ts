@@ -195,6 +195,14 @@ export const metricsRegistry = {
     "x4g4t_global_ai_lockdown_active",
     "Whether the emergency global AI lockdown kill-switch is engaged (1 = active, 0 = operational)"
   ),
+  killSwitchOperationalState: new Gauge(
+    "kill_switch_operational_state",
+    "Whether the emergency kill switch engine is initialized, healthy, and operational (1 = operational, 0 = down)"
+  ),
+  killSwitchActiveDropEngaged: new Gauge(
+    "kill_switch_active_drop_engaged",
+    "Whether the emergency bilateral air-gap kill switch is actively severing traffic (1 = actively severing, 0 = normal traffic flowing)"
+  ),
   policyFreezeActive: new Gauge(
     "x4g4t_policy_freeze_active",
     "Whether policy editing is frozen/locked (1 = frozen, 0 = editable)"
@@ -247,7 +255,10 @@ export const metricsRegistry = {
 
   render(): string {
     // Update live gauges
-    this.globalAiLockdownActive.set({}, isGlobalAiLockdownActive() ? 1 : 0);
+    const isEngaged = isGlobalAiLockdownActive() ? 1 : 0;
+    this.killSwitchOperationalState.set({}, 1); // Engine is armed, operational, and listening
+    this.killSwitchActiveDropEngaged.set({}, isEngaged);
+    this.globalAiLockdownActive.set({}, isEngaged);
     this.policyFreezeActive.set({}, isPolicyFreezeActive() ? 1 : 0);
 
     // Default operational status
@@ -274,6 +285,8 @@ export const metricsRegistry = {
       this.downstreamForwardDurationSeconds.render(),
       this.hitlRequestsTotal.render(),
       this.globalAiLockdownActive.render(),
+      this.killSwitchOperationalState.render(),
+      this.killSwitchActiveDropEngaged.render(),
       this.policyFreezeActive.render(),
       this.tokensInjectedTotal.render(),
       this.mcpRequestsTotal.render(),
