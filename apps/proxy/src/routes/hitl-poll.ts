@@ -10,7 +10,7 @@ export interface MockHitlRecord {
   orgId: string;
   createdAt?: number | Date;
   executionPayload?: {
-    downstream_url: string;
+    downstream_url?: string;
     downstream_headers: Record<string, string>;
     arguments: Record<string, unknown>;
   };
@@ -42,17 +42,24 @@ export async function approveMockHitlRecord(holdId: string, reviewerId: string =
   record.resolvedAt = new Date();
 
   if (record.executionPayload) {
-    try {
-      const forwardResult = await forwardDownstream(
-        record.executionPayload.downstream_url,
-        record.executionPayload.downstream_headers,
-        record.executionPayload.arguments
-      );
-      record.downstreamResponse = forwardResult;
-    } catch (err: any) {
+    if (record.executionPayload.downstream_url) {
+      try {
+        const forwardResult = await forwardDownstream(
+          record.executionPayload.downstream_url,
+          record.executionPayload.downstream_headers,
+          record.executionPayload.arguments
+        );
+        record.downstreamResponse = forwardResult;
+      } catch (err: any) {
+        record.downstreamResponse = {
+          statusCode: 502,
+          data: { error: { code: "DOWNSTREAM_ERROR", message: err?.message || "Downstream call failed" } }
+        };
+      }
+    } else {
       record.downstreamResponse = {
-        statusCode: 502,
-        data: { error: { code: "DOWNSTREAM_ERROR", message: err?.message || "Downstream call failed" } }
+        statusCode: 200,
+        data: { verdict: "ALLOW", message: "Tool execution approved by reviewer" }
       };
     }
   }

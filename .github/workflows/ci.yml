@@ -69,7 +69,7 @@ jobs:
           pnpm --filter @x4g4t/proxy exec tsc --noEmit
           pnpm --filter @x4g4t/web exec tsc --noEmit
 
-      - name: Run automated test suites (283 tests)
+      - name: Run automated test suites (300 tests)
         run: |
           pnpm --filter @x4g4t/policy-engine test
           pnpm --filter @x4g4t/proxy test

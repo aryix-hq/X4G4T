@@ -1,0 +1,217 @@
+{
+  "generatedAt": "2026-09-26T16:16:35.500Z",
+  "totalTests": 26,
+  "passed": 26,
+  "failed": 0,
+  "p0PassRate": "100%",
+  "results": [
+    {
+      "testId": "F-001",
+      "scenario": "Baseline ALLOW request contract",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 14,
+      "evidence": "Status 200, verdict=ALLOW"
+    },
+    {
+      "testId": "F-002",
+      "scenario": "Destructive SQL DROP TABLE users",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 2,
+      "evidence": "Status 422, code=POLICY_VIOLATION"
+    },
+    {
+      "testId": "F-003",
+      "scenario": "SQL Obfuscation Corpus (7 variations)",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 2,
+      "evidence": "All 7 mutations rejected with HTTP 422 POLICY_VIOLATION"
+    },
+    {
+      "testId": "F-004",
+      "scenario": "DLP Credit Card redaction with downstream verification",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 5,
+      "evidence": "Downstream received [REDACTED_PII:CREDIT_CARD]; raw card never transmitted"
+    },
+    {
+      "testId": "F-005",
+      "scenario": "DLP AWS Key redaction with downstream verification",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 2,
+      "evidence": "Downstream received [REDACTED_SECRET:AWS_KEY]; raw secret never transmitted"
+    },
+    {
+      "testId": "F-006",
+      "scenario": "DLP Deeply nested JSON redaction",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Nested card redacted at level 4; raw card never reached egress"
+    },
+    {
+      "testId": "F-010",
+      "scenario": "Global Emergency Kill Switch enforcement and recovery",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "HTTP 503 enforced across all agents; instant recovery on deactivation"
+    },
+    {
+      "testId": "F-013",
+      "scenario": "MCP JSON-RPC tools/call policy enforcement",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 3,
+      "evidence": "Destructive tool call intercepted with JSON-RPC error code -32001"
+    },
+    {
+      "testId": "B-001",
+      "scenario": "Missing Authorization header",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 1,
+      "evidence": "HTTP 401 UNAUTHORIZED"
+    },
+    {
+      "testId": "B-002",
+      "scenario": "Invalid Bearer Token",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 1,
+      "evidence": "HTTP 401 INVALID_API_KEY"
+    },
+    {
+      "testId": "B-004",
+      "scenario": "Schema Boundary & Type Checking",
+      "severity": "P2",
+      "status": "PASS",
+      "latencyMs": 1,
+      "evidence": "Controlled HTTP 400 BAD_REQUEST for all 4 malformed variants"
+    },
+    {
+      "testId": "B-008",
+      "scenario": "Deep JSON nesting (60 levels)",
+      "severity": "P1",
+      "status": "PASS",
+      "latencyMs": 4,
+      "evidence": "Processed safely without crash"
+    },
+    {
+      "testId": "N-004",
+      "scenario": "Upstream connection timeout tolerance",
+      "severity": "P1",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Gateway returned HTTP 504 DOWNSTREAM_TIMEOUT"
+    },
+    {
+      "testId": "N-005",
+      "scenario": "Upstream 500 error sanitization",
+      "severity": "P2",
+      "status": "PASS",
+      "latencyMs": 2,
+      "evidence": "Propagated without stack trace leakage"
+    },
+    {
+      "testId": "S-001",
+      "scenario": "SSRF defense: IPv4 Loopback",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://127.0.0.1:8080/admin)"
+    },
+    {
+      "testId": "S-002",
+      "scenario": "SSRF defense: IPv6 Loopback",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://[::1]:8080/metrics)"
+    },
+    {
+      "testId": "S-003",
+      "scenario": "SSRF defense: AWS/GCP IPv4 IMDS",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://169.254.169.254/latest/meta-data/)"
+    },
+    {
+      "testId": "S-003b",
+      "scenario": "SSRF defense: AWS IPv6 IMDS",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://[fd00:ec2::254]/latest/meta-data/)"
+    },
+    {
+      "testId": "S-004",
+      "scenario": "SSRF defense: RFC 1918 Class A",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 1,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://10.0.0.1/internal)"
+    },
+    {
+      "testId": "S-004b",
+      "scenario": "SSRF defense: RFC 1918 Class C",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://192.168.1.1/router)"
+    },
+    {
+      "testId": "S-006",
+      "scenario": "SSRF defense: Wildcard DNS Rebinding nip.io",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://127.0.0.1.nip.io/admin)"
+    },
+    {
+      "testId": "S-006b",
+      "scenario": "SSRF defense: Wildcard DNS Rebinding sslip.io",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://10-0-0-1.sslip.io/status)"
+    },
+    {
+      "testId": "S-007",
+      "scenario": "SSRF defense: Decimal IP integer representation",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://2130706433/admin)"
+    },
+    {
+      "testId": "S-007b",
+      "scenario": "SSRF defense: Hexadecimal IP representation",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 0,
+      "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://0x7f000001/admin)"
+    },
+    {
+      "testId": "S-008",
+      "scenario": "Shell command injection metacharacters",
+      "severity": "P0",
+      "status": "PASS",
+      "latencyMs": 1,
+      "evidence": "All 5 command injection attempts intercepted with HTTP 422 POLICY_VIOLATION"
+    },
+    {
+      "testId": "S-014",
+      "scenario": "Error message secret sanitization",
+      "severity": "P1",
+      "status": "PASS",
+      "latencyMs": 1,
+      "evidence": "Zero leakage of paths, env variables, or DB connection strings"
+    }
+  ]
+}

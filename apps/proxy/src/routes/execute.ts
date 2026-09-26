@@ -21,7 +21,7 @@ export const ExecutePayloadSchema = z.object({
   agent_id: z.string().min(1).max(128),
   tool_name: z.string().min(1).max(64),
   arguments: z.record(z.unknown()),
-  downstream_url: z.string().url(),
+  downstream_url: z.string().url().optional(),
   downstream_headers: z.record(z.string()).optional().default({}),
   stream: z.boolean().optional().default(false)
 });
@@ -113,9 +113,11 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
       const sessionId = request.headers["x-session-id"] as string | undefined;
 
       let destinationHost = "";
-      try {
-        destinationHost = new URL(downstream_url).hostname;
-      } catch {}
+      if (downstream_url) {
+        try {
+          destinationHost = new URL(downstream_url).hostname;
+        } catch {}
+      }
 
       const networkContext = {
         sourceIp: clientIp,
@@ -125,17 +127,19 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
       };
 
       // SSRF validation
-      const ssrfResult = validateDownstreamUrl(downstream_url, {
-        allowLocal: process.env.NODE_ENV !== "production" || process.env.ALLOW_LOCAL_DOWNSTREAM === "true"
-      });
-      if (!ssrfResult.valid) {
-        metricsRegistry.ssrfBlockedTotal.inc();
-        return reply.status(400).send({
-          error: {
-            code: "SSRF_BLOCKED",
-            message: `Downstream target rejected by SSRF guard: ${ssrfResult.reason}`
-          }
+      if (downstream_url) {
+        const ssrfResult = validateDownstreamUrl(downstream_url, {
+          allowLocal: process.env.NODE_ENV !== "production" || process.env.ALLOW_LOCAL_DOWNSTREAM === "true"
         });
+        if (!ssrfResult.valid) {
+          metricsRegistry.ssrfBlockedTotal.inc();
+          return reply.status(403).send({
+            error: {
+              code: "SSRF_BLOCKED",
+              message: `Downstream target rejected by SSRF guard: ${ssrfResult.reason}`
+            }
+          });
+        }
       }
 
       // IAM context extraction from authenticated identity
@@ -363,6 +367,54 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const effectiveArgs = (dlpResult.sanitizedData as Record<string, unknown>) || toolArgs;
+
+        // If no downstream_url is specified (firewall evaluation mode / quickstart baseline probe)
+        if (!downstream_url) {
+          const totalDurationMs = Math.round(performance.now() - startTime);
+          metricsRegistry.httpRequestsTotal.inc({ method: "POST", route: "/v1/gateway/execute", status: 200, verdict: "PASSED" });
+          metricsRegistry.httpRequestDurationSeconds.observe({ route: "/v1/gateway/execute" }, totalDurationMs / 1000);
+
+          void enqueueAuditLog({
+            orgId: request.orgId,
+            agentId: agent_id,
+            userEmail,
+            userName,
+            clientIp,
+            clientHostname,
+            sessionId,
+            toolName: tool_name,
+            arguments: sanitizedArgs as Record<string, unknown>,
+            verdict: "PASSED",
+            latencyMs: totalDurationMs,
+            createdAt: new Date().toISOString()
+          });
+
+          safeExportLog({
+            orgId: request.orgId,
+            agentId: agent_id,
+            toolName: tool_name,
+            arguments: sanitizedArgs as Record<string, unknown>,
+            verdict: "PASSED",
+            mode: "ACTIVE",
+            latencyMs: totalDurationMs,
+            statusCode: 200,
+            clientIp,
+            userEmail,
+            userName,
+            clientHostname,
+            sessionId,
+            iam: iamContext,
+            network: networkContext,
+            createdAt: new Date().toISOString()
+          });
+
+          return reply.status(200).send({
+            verdict: "ALLOW",
+            latencyMs: totalDurationMs,
+            toolName: tool_name,
+            message: "Tool execution passed all active policy guardrails."
+          });
+        }
 
         const downstreamStartTime = performance.now();
         const forwardResult = await forwardDownstream(

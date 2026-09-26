@@ -244,7 +244,7 @@ describe("Fastify Proxy Ingestion Engine (/v1/gateway/execute)", () => {
     expect(body.error.code).toBe("BAD_GATEWAY");
   });
 
-  it("should reject SSRF attempts targeting cloud metadata (400 SSRF_BLOCKED)", async () => {
+  it("should reject SSRF attempts targeting cloud metadata (403 SSRF_BLOCKED)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/gateway/execute",
@@ -259,7 +259,7 @@ describe("Fastify Proxy Ingestion Engine (/v1/gateway/execute)", () => {
       }
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(403);
     const body = res.json();
     expect(body.error.code).toBe("SSRF_BLOCKED");
   });

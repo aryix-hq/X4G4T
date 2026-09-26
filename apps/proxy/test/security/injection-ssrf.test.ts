@@ -103,7 +103,7 @@ describe("SUITE 3.4: Defense-Grade Security - Injection & Boundary Sanitization"
         }
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(403);
       const json = JSON.parse(res.payload);
       expect(json.error.code).toBe("SSRF_BLOCKED");
       expect(fetchSpy).not.toHaveBeenCalled();
