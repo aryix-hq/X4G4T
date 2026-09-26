@@ -4,7 +4,7 @@
 FROM node:20-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN npm install -g pnpm@12.4.2 turbo@^2.0.0
 RUN apk add --no-cache libc6-compat curl
 
 # ----------------------------------------------------
@@ -12,7 +12,6 @@ RUN apk add --no-cache libc6-compat curl
 # ----------------------------------------------------
 FROM base AS pruner
 WORKDIR /app
-RUN npm install -g turbo
 COPY . .
 RUN turbo prune @x4g4t/web --docker
 
