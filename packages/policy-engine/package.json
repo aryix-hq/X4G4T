@@ -11,12 +11,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@x4g4t/tsconfig": "workspace:*",
-    "@types/node": "^20.14.9",
-    "typescript": "^5.5.4",
-    "vitest": "^2.0.5"
+    "@types/node": "^26.6.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
   }
 }
