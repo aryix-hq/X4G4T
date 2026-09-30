@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-26T16:16:35.500Z",
+  "generatedAt": "2026-09-30T05:53:54.386Z",
   "totalTests": 26,
   "passed": 26,
   "failed": 0,
@@ -10,7 +10,7 @@
       "scenario": "Baseline ALLOW request contract",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 14,
+      "latencyMs": 45,
       "evidence": "Status 200, verdict=ALLOW"
     },
     {
@@ -18,7 +18,7 @@
       "scenario": "Destructive SQL DROP TABLE users",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 2,
+      "latencyMs": 5,
       "evidence": "Status 422, code=POLICY_VIOLATION"
     },
     {
@@ -34,7 +34,7 @@
       "scenario": "DLP Credit Card redaction with downstream verification",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 5,
+      "latencyMs": 6,
       "evidence": "Downstream received [REDACTED_PII:CREDIT_CARD]; raw card never transmitted"
     },
     {
@@ -42,7 +42,7 @@
       "scenario": "DLP AWS Key redaction with downstream verification",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 2,
+      "latencyMs": 3,
       "evidence": "Downstream received [REDACTED_SECRET:AWS_KEY]; raw secret never transmitted"
     },
     {
@@ -50,7 +50,7 @@
       "scenario": "DLP Deeply nested JSON redaction",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Nested card redacted at level 4; raw card never reached egress"
     },
     {
@@ -58,7 +58,7 @@
       "scenario": "Global Emergency Kill Switch enforcement and recovery",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "HTTP 503 enforced across all agents; instant recovery on deactivation"
     },
     {
@@ -106,7 +106,7 @@
       "scenario": "Upstream connection timeout tolerance",
       "severity": "P1",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 5,
       "evidence": "Gateway returned HTTP 504 DOWNSTREAM_TIMEOUT"
     },
     {
@@ -122,7 +122,7 @@
       "scenario": "SSRF defense: IPv4 Loopback",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://127.0.0.1:8080/admin)"
     },
     {
@@ -130,7 +130,7 @@
       "scenario": "SSRF defense: IPv6 Loopback",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://[::1]:8080/metrics)"
     },
     {
@@ -138,7 +138,7 @@
       "scenario": "SSRF defense: AWS/GCP IPv4 IMDS",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://169.254.169.254/latest/meta-data/)"
     },
     {
@@ -146,7 +146,7 @@
       "scenario": "SSRF defense: AWS IPv6 IMDS",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://[fd00:ec2::254]/latest/meta-data/)"
     },
     {
@@ -162,7 +162,7 @@
       "scenario": "SSRF defense: RFC 1918 Class C",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 3,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://192.168.1.1/router)"
     },
     {
@@ -178,7 +178,7 @@
       "scenario": "SSRF defense: Wildcard DNS Rebinding sslip.io",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://10-0-0-1.sslip.io/status)"
     },
     {
@@ -186,7 +186,7 @@
       "scenario": "SSRF defense: Decimal IP integer representation",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://2130706433/admin)"
     },
     {
@@ -194,7 +194,7 @@
       "scenario": "SSRF defense: Hexadecimal IP representation",
       "severity": "P0",
       "status": "PASS",
-      "latencyMs": 0,
+      "latencyMs": 1,
       "evidence": "Blocked with HTTP 403 SSRF_BLOCKED (http://0x7f000001/admin)"
     },
     {

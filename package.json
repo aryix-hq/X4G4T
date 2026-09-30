@@ -20,6 +20,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "test": "turbo run test",
+    "test:audit:pipelines": "pnpm --filter @x4g4t/proxy exec tsx ../../tests/e2e/dual-pipeline-audit.ts",
     "db:bootstrap": "pnpm --filter @x4g4t/db db:bootstrap",
     "postinstall": "node scripts/patch-clerk-next15.js"
   },

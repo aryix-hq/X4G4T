@@ -386,6 +386,7 @@ Full methodology and stress tests: [docs/PERFORMANCE_BENCHMARKS.md](docs/PERFORM
 
 ## 📚 Plain-English Documentation Guides
 
+- 📑 [**Master Documentation Index**](docs/INDEX.md) — Unified sitemap covering getting started, architecture, governance, integrations, and operations.
 - 📘 [**How It Works (Architecture for Non-Engineers)**](docs/HOW_IT_WORKS.md) — Simple, step-by-step walkthrough of request lifecycles, service roles, and fail-closed defenses.
 - 📙 [**Policy Setup Guide**](docs/POLICY_GUIDE.md) — How to configure rules, thresholds, and Slack approvals with real-world examples.
 - 📗 [**Connecting Your Tools & IDEs**](docs/CONNECTING_YOUR_TOOLS.md) — 5-minute setup instructions for Cursor, Windsurf, VS Code, Ollama, and OpenAI/Anthropic.
@@ -409,7 +410,28 @@ pnpm test
 
 ---
 
+## Support & Enterprise Sponsorship
+
+X4G4T is an open-source, defense-grade security proxy built for the autonomous AI ecosystem. You can support core development, infrastructure testing, and feature acceleration through our sponsorship tiers:
+
+* **Tier 1: Community Backer ($5–$25/mo)**
+  * Support open-source maintenance and hosting of demo infrastructure.
+  * Receive a Community Backer badge in our official `README.md` and Discord/community recognition.
+* **Tier 2: Fast-Track Feature Sponsorship ($250–$500 one-time)**
+  * Sponsor a specific integration or feature (e.g., custom MCP connector, dedicated Graylog filter, or Ollama runtime adapter).
+  * Direct review and prioritized merge SLA from the core maintainers.
+* **Tier 3: Enterprise Advisory & Support ($500–$2,000/mo)**
+  * Dedicated private Slack/Teams channel with core architects.
+  * Bi-weekly architectural and security reviews of your deployment.
+  * Custom policy rule authoring, bespoke DLP pattern development, and prioritized emergency patches.
+  * **Enterprise Invoicing:** Provided as an invoiceable professional service via ARYIX for corporate procurement compliance.
+
+👉 [**Sponsor X4G4T on GitHub**](https://github.com/sponsors/aryix-hq) | [**Enterprise Procurement & Custom SLA**](https://www.aryix.co.in/x4g4t/sponsor)
+
+---
+
 ## 📄 License
 
 X4G4T is open-source software licensed under the **[Apache License, Version 2.0](LICENSE)**.
+
 
