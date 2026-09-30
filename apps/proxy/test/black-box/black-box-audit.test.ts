@@ -108,7 +108,7 @@ describe("X4G4T Comprehensive Black-Box QA & Security Audit Suite", () => {
     vi.restoreAllMocks();
 
     // Write machine-readable audit report artifact
-    const reportPath = path.resolve(process.cwd(), "../../docs/BLACK_BOX_AUDIT_REPORT.json");
+    const reportPath = path.resolve(process.cwd(), "../../docs/audits/BLACK_BOX_AUDIT_REPORT.json");
     try {
       const summary = {
         generatedAt: new Date().toISOString(),

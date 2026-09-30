@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Test Suite](https://img.shields.io/badge/Tests-100%25_Passing-brightgreen.svg)](https://github.com/aryix-hq/X4G4T)
-[![AST Evaluation](https://img.shields.io/badge/AST_Evaluation-%3C0.2ms-orange.svg)](docs/PERFORMANCE_BENCHMARKS.md)
+[![AST Evaluation](https://img.shields.io/badge/AST_Evaluation-%3C0.2ms-orange.svg)](docs/audits/PERFORMANCE_BENCHMARKS.md)
 [![mcp-proxy](https://img.shields.io/badge/topic-mcp--proxy-blue.svg)](https://github.com/topics/mcp-proxy)
 [![agent-guardrails](https://img.shields.io/badge/topic-agent--guardrails-green.svg)](https://github.com/topics/agent-guardrails)
 [![dlp-proxy](https://img.shields.io/badge/topic-dlp--proxy-purple.svg)](https://github.com/topics/dlp-proxy)
@@ -16,7 +16,7 @@
 
 *Sub-millisecond runtime policy enforcement, zero-trust LLM credential substitution, in-flight DLP redaction, SSRF protection, sliding-window rate limiting, and tamper-evident audit logging for autonomous agents and MCP servers.*
 
-[Quickstart](#-3-minute-quickstart) • [How It Works](docs/HOW_IT_WORKS.md) • [Policy Guide](docs/POLICY_GUIDE.md) • [Connect Tools](docs/CONNECTING_YOUR_TOOLS.md) • [Architecture](#-architecture--visual-flow) • [Features](#-core-capabilities) • [Docs](docs/) • [Contributing](CONTRIBUTING.md)
+[Quickstart](#-3-minute-quickstart) • [How It Works](docs/overview/HOW_IT_WORKS.md) • [Policy Guide](docs/governance/POLICY_GUIDE.md) • [Connect Tools](docs/integrations/CONNECTING_YOUR_TOOLS.md) • [Architecture](#-architecture--visual-flow) • [Features](#-core-capabilities) • [Docs](docs/INDEX.md) • [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -209,9 +209,14 @@ docker pull ghcr.io/aryix-hq/x4g4t-web:latest
 │   ├── policy-engine/      # Pure TypeScript AST engine (zero-allocation evaluator & DLP)
 │   └── db/                 # Drizzle ORM schema, migrations, and PostgreSQL client
 ├── docs/                   # Complete architecture, policy guides, and whitepapers
-│   ├── HOW_IT_WORKS.md     # Architecture and data flow for non-engineers
-│   ├── POLICY_GUIDE.md     # Real-world safety rules guide (refunds, SQL, DLP)
-│   └── CONNECTING_YOUR_TOOLS.md # Setup guide for Cursor, VS Code, Ollama, & LLMs
+│   ├── INDEX.md            # Master sitemap & categorized navigation
+│   ├── overview/           # Layman guides, architecture analogies, and quickstarts
+│   ├── architecture/       # System topology, streaming pipelines, and network routing
+│   ├── governance/         # Policy guides, templates, DLP, and RBAC specifications
+│   ├── integrations/       # Tool connection guides (Cursor, Ollama, Cloud LLMs)
+│   ├── ops/                # Docker compose, Kubernetes, and Grafana provisioning
+│   ├── audits/             # Black-box security audits, benchmarks, and scorecards
+│   └── planning/           # Implementation plans and development phase roadmaps
 ├── docker/                 # Production Dockerfiles, Grafana dashboards, & init scripts
 └── k8s/                    # Enterprise Kubernetes deployment manifests & Helm charts
 ```
@@ -350,7 +355,7 @@ To dry-run or target a specific namespace:
 ./scripts/deploy-k8s.sh --namespace prod-x4g4t
 ```
 
-For complete architecture details, read [docs/DOCKER_COMPOSE_STACK.md](docs/DOCKER_COMPOSE_STACK.md).
+For complete architecture details, read [docs/ops/DOCKER_COMPOSE_STACK.md](docs/ops/DOCKER_COMPOSE_STACK.md).
 
 ---
 
@@ -361,7 +366,7 @@ X4G4T exposes real-time operational telemetry at `GET /metrics`:
 - **Threat Mitigation Counters**: SSRF blocks, DLP redactions, rate limit hits, and token injections.
 - **Infrastructure Health Gauges**: Live PostgreSQL and Redis connection statuses.
 
-Read [docs/OBSERVABILITY_GRAFANA_PROVISIONING.md](docs/OBSERVABILITY_GRAFANA_PROVISIONING.md) for Prometheus scraping configs, Elasticsearch schemas, and PromQL alerting recipes.
+Read [docs/ops/OBSERVABILITY_GRAFANA_PROVISIONING.md](docs/ops/OBSERVABILITY_GRAFANA_PROVISIONING.md) for Prometheus scraping configs, Elasticsearch schemas, and PromQL alerting recipes.
 
 ---
 
@@ -380,17 +385,17 @@ P90 Latency:        0.308ms
 P99 Latency:        1.399ms
 ======================================================
 ```
-Full methodology and stress tests: [docs/PERFORMANCE_BENCHMARKS.md](docs/PERFORMANCE_BENCHMARKS.md).
+Full methodology and stress tests: [docs/audits/PERFORMANCE_BENCHMARKS.md](docs/audits/PERFORMANCE_BENCHMARKS.md).
 
 ---
 
 ## 📚 Plain-English Documentation Guides
 
 - 📑 [**Master Documentation Index**](docs/INDEX.md) — Unified sitemap covering getting started, architecture, governance, integrations, and operations.
-- 📘 [**How It Works (Architecture for Non-Engineers)**](docs/HOW_IT_WORKS.md) — Simple, step-by-step walkthrough of request lifecycles, service roles, and fail-closed defenses.
-- 📙 [**Policy Setup Guide**](docs/POLICY_GUIDE.md) — How to configure rules, thresholds, and Slack approvals with real-world examples.
-- 📗 [**Connecting Your Tools & IDEs**](docs/CONNECTING_YOUR_TOOLS.md) — 5-minute setup instructions for Cursor, Windsurf, VS Code, Ollama, and OpenAI/Anthropic.
-- 📕 [**System Architecture & Deep Dive**](docs/ARCHITECTURE.md) — Technical breakdown of AST compilation, ring buffers, and distributed caching.
+- 📘 [**How It Works (Architecture for Non-Engineers)**](docs/overview/HOW_IT_WORKS.md) — Simple, step-by-step walkthrough of request lifecycles, service roles, and fail-closed defenses.
+- 📙 [**Policy Setup Guide**](docs/governance/POLICY_GUIDE.md) — How to configure rules, thresholds, and Slack approvals with real-world examples.
+- 📗 [**Connecting Your Tools & IDEs**](docs/integrations/CONNECTING_YOUR_TOOLS.md) — 5-minute setup instructions for Cursor, Windsurf, VS Code, Ollama, and OpenAI/Anthropic.
+- 📕 [**System Architecture & Topology**](docs/architecture/SYSTEM_TOPOLOGY.md) — Technical breakdown of the 3-plane decoupled architecture, AST compilation, and distributed streaming.
 
 ---
 

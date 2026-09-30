@@ -44,9 +44,9 @@ Version 0.2.0 transforms X4G4T from a core proxy firewall into a defense-grade e
 - **Client Simulator & Chaos Drill Suite (`apps/client-simulator`, `scripts/simulate-mock-drill.sh`)**:
   - Automated drill script simulating concurrent compliant, malicious, and exfiltration tool calls to verify firewall effectiveness.
 - **Plain-English Documentation Suite**:
-  - Published [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md) (Architecture for Non-Engineers with everyday analogies).
-  - Published [`docs/POLICY_GUIDE.md`](docs/POLICY_GUIDE.md) (Step-by-step guide to setting up safety rules).
-  - Published [`docs/CONNECTING_YOUR_TOOLS.md`](docs/CONNECTING_YOUR_TOOLS.md) (Setup guides for Cursor, VS Code, Ollama, and Cloud LLMs).
+  - Published [`docs/overview/HOW_IT_WORKS.md`](docs/overview/HOW_IT_WORKS.md) (Architecture for Non-Engineers with everyday analogies).
+  - Published [`docs/governance/POLICY_GUIDE.md`](docs/governance/POLICY_GUIDE.md) (Step-by-step guide to setting up safety rules).
+  - Published [`docs/integrations/CONNECTING_YOUR_TOOLS.md`](docs/integrations/CONNECTING_YOUR_TOOLS.md) (Setup guides for Cursor, VS Code, Ollama, and Cloud LLMs).
 
 ### Changed
 - **AST Policy Engine (`packages/policy-engine`)**:
