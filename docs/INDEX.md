@@ -95,7 +95,8 @@ Independent security audits, latency measurements, and verification reports:
 
 ### 07. Planning, Milestones & Roadmap
 Strategic engineering evolution and historical project delivery:
-- [**Engineering Product Roadmap**](ROADMAP.md): Phased engineering milestones spanning eBPF kernel redirection, ONNX tensor models, and enterprise zero-trust mesh.
+- [**Strategic Product Blueprint**](planning/STRATEGIC_PRODUCT_BLUEPRINT.md): Comprehensive ICP definition, competitive positioning, open-core monetization model, and OWASP-aligned adversarial moat.
+- [**Product Execution Roadmap**](ROADMAP.md): 12-month phased strategic roadmap covering 5-minute MCP drop-in, Policy-as-Code CLI, 6-tuple agent identity, and enterprise fleet scale.
 - [**Implementation Master Plan**](planning/IMPLEMENTATION_PLAN.md): Architectural design document outlining the five implementation phases.
 - [**Phase 1: Database & Policy Engine**](planning/phases/PHASE_1_DATABASE_AND_POLICY_ENGINE.md)
 - [**Phase 2: Fastify Proxy Ingestion**](planning/phases/PHASE_2_FASTIFY_PROXY_INGESTION.md)

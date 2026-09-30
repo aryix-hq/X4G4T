@@ -392,6 +392,7 @@ Full methodology and stress tests: [docs/audits/PERFORMANCE_BENCHMARKS.md](docs/
 ## 📚 Plain-English Documentation Guides
 
 - 📑 [**Master Documentation Index**](docs/INDEX.md) — Unified sitemap covering getting started, architecture, governance, integrations, and operations.
+- 🗺️ [**Strategic Product Blueprint & Roadmap**](docs/planning/STRATEGIC_PRODUCT_BLUEPRINT.md) — Category definition, ICP personas, open-core monetization, and 12-month milestones.
 - 📘 [**How It Works (Architecture for Non-Engineers)**](docs/overview/HOW_IT_WORKS.md) — Simple, step-by-step walkthrough of request lifecycles, service roles, and fail-closed defenses.
 - 📙 [**Policy Setup Guide**](docs/governance/POLICY_GUIDE.md) — How to configure rules, thresholds, and Slack approvals with real-world examples.
 - 📗 [**Connecting Your Tools & IDEs**](docs/integrations/CONNECTING_YOUR_TOOLS.md) — 5-minute setup instructions for Cursor, Windsurf, VS Code, Ollama, and OpenAI/Anthropic.
