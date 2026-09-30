@@ -2,7 +2,7 @@
 
 > **Author**: ARYIX (OPC) Private Limited  
 > **Brand**: X4G4T (`@aryix-hq/x4g4t`)  
-> **Strategic Classification**: Product Strategy, ICP, Competitive Positioning & 12-Month Commercial Roadmap  
+> **Strategic Classification**: Product Strategy, ICP, Competitive Positioning, Sizing & 12-Month Commercial Roadmap  
 > **Date**: September 2026
 
 ---
@@ -292,3 +292,86 @@ We track success not by feature volume, but by three operational metrics:
    $$\text{Target}: 10\text{M} \longrightarrow 100\text{M} \longrightarrow 1\text{B} \text{ tool calls/month}$$
 3. **Deterministic Decisions Rendered**:
    $$\text{Tracked via Telemetry}: \sum (\text{ALLOW} + \text{DENY} + \text{REDACT} + \text{HELD})$$
+
+---
+
+## 8. Implementation Effort, Sizing & Resource Allocation Matrix
+
+To move from the current architecture to the complete 12-month vision, the engineering work is sized below using standard Agile Story Points (Fibonacci scale) and Person-Weeks (PW), grounded in the existing repository assets:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        ENGINEERING EFFORT OVERVIEW (41 PERSON-WEEKS)                   │
+│                                                                                        │
+│  Phase 1: Zero-Friction Dev Adoption (M1, M2)  ███████▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  6.0 PW (15%)  │
+│  Phase 2: Identity & Framework SDKs (M3, M4)   ████████████▒▒▒▒▒▒▒▒▒▒▒▒ 10.0 PW (24%) │
+│  Phase 3: Adversarial Benchmark Moat (M5, M6)  █████████████▒▒▒▒▒▒▒▒▒▒▒ 11.0 PW (27%) │
+│  Phase 4: Enterprise Fleet Scale (M7, M8)      ████████████████▒▒▒▒▒▒▒▒ 14.0 PW (34%) │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Detailed Milestone Sizing & Work Breakdown
+
+| Milestone | Key Deliverables | Existing Asset Base in Repo | Net-New Work Required | Story Points | Effort (PW) | Recommended Staffing |
+| :--- | :--- | :--- | :--- | :---: | :---: | :--- |
+| **M1: 5-Min MCP Drop-In CLI** | Standalone `@x4g4t/cli mcp` command, Stdio $\leftrightarrow$ SSE bidirectional router, Cursor/Claude Desktop auto-config generator. | Fastify `/v1/mcp` JSON-RPC 2.0 route handler, MCP test suite. | Subprocess stdio transport daemon, CLI packaging, local config injection scripts. | **13 SP** | **2.5 PW** | 1 Senior Systems / Node Engineer |
+| **M2: Policy-as-Code Engine (`x4g4t.yaml`)** | Declarative YAML parser with Zod schemas, `x4g4t lint`, `x4g4t test` fixture runner, `x4g4t explain`, GitHub Action. | Pure TypeScript AST Evaluator (`@x4g4t/policy-engine`), in-memory test fixtures. | YAML compiler into AST nodes, offline runner engine, decision tracer formatter, GitHub Action. | **21 SP** | **3.5 PW** | 1 Senior Compilers / TS Engineer |
+| **M3: 6-Tuple Agent Identity Matrix** | Contextual tuple evaluator $\langle \text{Human, Agent, Session, Tool, Data, Intent}\rangle$, Clerk/Okta/OIDC decoder, scope step-up lock. | Role/permission tables in `packages/db`, JWT token validation in `apps/proxy`. | Multi-tenant session state manager, contextual AST evaluator context expansion, Redis session lock. | **21 SP** | **4.5 PW** | 1 Security / Backend Engineer |
+| **M4: Universal Language SDKs (Python + Node)** | Python PyPI package `x4g4t` with LangGraph/CrewAI decorators, standalone `@x4g4t/sdk` npm package. | In-memory evaluation logic in `@x4g4t/policy-engine`. | Pure Python port of AST engine & regex/entropy DLP, framework middleware bindings, PyPI distribution. | **34 SP** | **5.5 PW** | 1 Python/AI Engineer + 1 TS Engineer |
+| **M5: Adversarial Benchmark Corpus (1,000+ Attacks)** | 1,000+ reproducible test attack fixtures, OWASP 2026 Agentic Top 10 mapping, automated scoring CLI & GitHub Pages leaderboard. | Black-box test suite (`apps/proxy/test/black-box/*`), SSRF and DLP evasion suites. | Comprehensive adversarial dataset curation, automated runner harness, report generator. | **34 SP** | **7.0 PW** | 1 Security Researcher / AppSec Lead |
+| **M6: Stateful HITL & Drift Mining** | Interactive Slack Block Kit & Teams card webhook receiver, cryptographic approval tokens, automated P99 threshold generator. | `apps/proxy/src/routes/hitl.ts`, `apps/aux-ops/src/ml-miner.ts`. | Slack/Teams webhook integration, HMAC signature verification, timeout fallback workers. | **21 SP** | **4.0 PW** | 1 Full-Stack / Integrations Engineer |
+| **M7: Enterprise Fleet Control Plane** | Multi-tenant proxy node registry, heartbeat pinging, real-time agent inventory dashboard, remote policy distribution. | Next.js 14 control plane (`apps/web`), status console (`/status`), metrics endpoints. | Agent inventory DB schema, fleet websocket/gRPC coordinator, multi-tenant RBAC enforcement. | **55 SP** | **8.0 PW** | 1 Senior Frontend/Next.js + 1 Backend Lead |
+| **M8: GitOps Sync & Cryptographic WORM** | Distributed policy sync via Raft/Redis PubSub, S3 Object Lock compliance storage, SOC2 Type II automated evidence binder scripts. | Redis kill switch sync in `apps/proxy`, Graylog SIEM forwarder sidecar. | AWS S3 Object Lock WORM sink, GitOps pull-reconciler worker, compliance report generator. | **34 SP** | **6.0 PW** | 1 Cloud / DevSecOps Engineer |
+| **TOTALS** | **Full 4-Phase Strategic Delivery** | — | — | **233 SP** | **41.0 PW** | **2–3 Engineers** |
+
+---
+
+### Team Composition & Execution Velocity
+
+Depending on team sizing, the total effort of **41 Person-Weeks (~10 Person-Months)** maps directly to the following delivery schedules:
+
+```mermaid
+flowchart TD
+    subgraph S1["Team Model A: Lean Duo (2 Senior Engineers)"]
+        A1["1 Systems/Security Lead + 1 Full-Stack Platform Eng"]
+        A2["Velocity: ~4.5 Story Points / Week (2 PW / week)"]
+        A3["Duration: ~20.5 Calendar Weeks (5.1 Months)"]
+    end
+
+    subgraph S2["Team Model B: Ideal Squad (3 Full-Time Engineers)"]
+        B1["1 Systems/AppSec Lead + 1 Compiler/Python Eng + 1 Cloud/Full-Stack Eng"]
+        B2["Velocity: ~7 Story Points / Week (3 PW / week)"]
+        B3["Duration: ~13.7 Calendar Weeks (3.4 Months)"]
+    end
+```
+
+1. **Option A: Lean Duo (2 Engineers)**:
+   - **Velocity**: 2 Person-Weeks delivered per calendar week.
+   - **Phase 1 (M1, M2)**: Weeks 1–3 (3.0 calendar weeks)
+   - **Phase 2 (M3, M4)**: Weeks 4–8 (5.0 calendar weeks)
+   - **Phase 3 (M5, M6)**: Weeks 9–14 (5.5 calendar weeks)
+   - **Phase 4 (M7, M8)**: Weeks 15–21 (7.0 calendar weeks)
+   - **Total Duration**: **~5 Months** to complete the entire commercial roadmap.
+
+2. **Option B: Ideal Core Squad (3 Engineers)**:
+   - **Velocity**: 3 Person-Weeks delivered per calendar week.
+   - **Phase 1 (M1, M2)**: Weeks 1–2 (2.0 calendar weeks)
+   - **Phase 2 (M3, M4)**: Weeks 3–6 (3.3 calendar weeks)
+   - **Phase 3 (M5, M6)**: Weeks 7–10 (3.7 calendar weeks)
+   - **Phase 4 (M7, M8)**: Weeks 11–15 (4.7 calendar weeks)
+   - **Total Duration**: **~3.5 Months** to reach production enterprise fleet readiness.
+
+---
+
+### Capital & Operational Infrastructure Budget
+
+| Expense Category | Monthly Estimated Cost | Rationale |
+| :--- | :---: | :--- |
+| **Adversarial Benchmark CI/CD Compute** | \$200 – \$400 / mo | GitHub Actions matrix runners executing 1,000+ adversarial attack payloads across Mac, Linux, and Windows. |
+| **Multi-Cloud Test VPCs (AWS, GCP, Azure)** | \$250 – \$450 / mo | Live target environments for cloud KMS, IAM federation, and S3 Object Lock WORM retention verification. |
+| **Package Registries & Distribution** | \$0 / mo | Public npm (`@x4g4t/*`), PyPI (`x4g4t`), and GitHub Container Registry (`ghcr.io`). |
+| **Third-Party AppSec Penetration Testing** | \$15,000 – \$25,000 *(one-time)* | Independent external audit of the AST engine and proxy prior to commercial enterprise GA (Phase 4). |
+| **SOC 2 Type II Compliance Automation** | \$7,500 – \$12,000 *(annual)* | Vanta / Drata continuous monitoring integration for the enterprise control plane. |
+
+---
+*Signed and adopted as the foundational strategic and sizing document for X4G4T.*
