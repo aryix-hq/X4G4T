@@ -24,6 +24,20 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: x4g4t
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       REDIS_URL: redis://localhost:6379
       PORT: 8080
@@ -31,6 +45,9 @@ jobs:
       INTERNAL_JWT_SECRET: test-jwt-secret-for-ci-32-chars-long!
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/x4g4t
       RATE_LIMIT_MAX_REQUESTS: 100
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+      CLERK_SECRET_KEY: sk_test_mock_secret_key_for_ci_build_verification
+      NODE_ENV: test
 
     steps:
       - name: Checkout code
@@ -46,6 +63,8 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -69,7 +88,7 @@ jobs:
           pnpm --filter @x4g4t/proxy exec tsc --noEmit
           pnpm --filter @x4g4t/web exec tsc --noEmit
 
-      - name: Run automated test suites (300 tests)
+      - name: Run automated test suites
         run: |
           pnpm --filter @x4g4t/policy-engine test
           pnpm --filter @x4g4t/proxy test
@@ -77,3 +96,5 @@ jobs:
 
       - name: Verify Next.js production build
         run: pnpm --filter @x4g4t/web build
+        env:
+          NODE_ENV: production

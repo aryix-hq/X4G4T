@@ -238,16 +238,21 @@ export async function forwardDownstream(
     );
 
     if (!authHeader || isGatewayProxyKey || isDummyKey) {
-      if (url.includes("api.openai.com") && process.env.OPENAI_API_KEY) {
+      let targetHostname = "";
+      try {
+        targetHostname = new URL(url).hostname.toLowerCase();
+      } catch {}
+
+      if (targetHostname === "api.openai.com" && process.env.OPENAI_API_KEY) {
         injectedHeaders["Authorization"] = `Bearer ${process.env.OPENAI_API_KEY}`;
         metricsRegistry.tokensInjectedTotal.inc({ provider: "openai" });
-      } else if (url.includes("api.anthropic.com") && process.env.ANTHROPIC_API_KEY) {
+      } else if (targetHostname === "api.anthropic.com" && process.env.ANTHROPIC_API_KEY) {
         delete injectedHeaders["Authorization"];
         delete injectedHeaders["authorization"];
         injectedHeaders["x-api-key"] = process.env.ANTHROPIC_API_KEY;
         injectedHeaders["anthropic-version"] = injectedHeaders["anthropic-version"] || "2023-06-01";
         metricsRegistry.tokensInjectedTotal.inc({ provider: "anthropic" });
-      } else if (url.includes("generativelanguage.googleapis.com") && process.env.GEMINI_API_KEY) {
+      } else if (targetHostname === "generativelanguage.googleapis.com" && process.env.GEMINI_API_KEY) {
         delete injectedHeaders["Authorization"];
         delete injectedHeaders["authorization"];
         injectedHeaders["x-goog-api-key"] = process.env.GEMINI_API_KEY;
@@ -311,16 +316,21 @@ export async function forwardDownstreamStreaming(
   );
 
   if (!authHeader || isGatewayProxyKey || isDummyKey) {
-    if (url.includes("api.openai.com") && process.env.OPENAI_API_KEY) {
+    let targetHostname = "";
+    try {
+      targetHostname = new URL(url).hostname.toLowerCase();
+    } catch {}
+
+    if (targetHostname === "api.openai.com" && process.env.OPENAI_API_KEY) {
       injectedHeaders["Authorization"] = `Bearer ${process.env.OPENAI_API_KEY}`;
       metricsRegistry.tokensInjectedTotal.inc({ provider: "openai" });
-    } else if (url.includes("api.anthropic.com") && process.env.ANTHROPIC_API_KEY) {
+    } else if (targetHostname === "api.anthropic.com" && process.env.ANTHROPIC_API_KEY) {
       delete injectedHeaders["Authorization"];
       delete injectedHeaders["authorization"];
       injectedHeaders["x-api-key"] = process.env.ANTHROPIC_API_KEY;
       injectedHeaders["anthropic-version"] = injectedHeaders["anthropic-version"] || "2023-06-01";
       metricsRegistry.tokensInjectedTotal.inc({ provider: "anthropic" });
-    } else if (url.includes("generativelanguage.googleapis.com") && process.env.GEMINI_API_KEY) {
+    } else if (targetHostname === "generativelanguage.googleapis.com" && process.env.GEMINI_API_KEY) {
       delete injectedHeaders["Authorization"];
       delete injectedHeaders["authorization"];
       injectedHeaders["x-goog-api-key"] = process.env.GEMINI_API_KEY;
