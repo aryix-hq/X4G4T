@@ -48,8 +48,11 @@ export async function assertAdminRole(): Promise<void> {
 }
 
 export async function switchRoleAction(newRole: "admin" | "developer") {
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_ROLE_SWITCH !== "true") {
+    throw new Error("403 Forbidden: Dynamic role switching via cookie is disabled in production environments.");
+  }
   const cookieStore = await cookies();
-  cookieStore.set("x4g4t_role", newRole, { path: "/" });
+  cookieStore.set("x4g4t_role", newRole, { path: "/", httpOnly: true, secure: process.env.NODE_ENV === "production" });
   try {
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/policies");

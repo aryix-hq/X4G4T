@@ -190,13 +190,17 @@ export async function resolveIamUser(): Promise<IamUserSession> {
   const provider = detectActiveIamProvider();
 
   let roleOverride: IamRole | undefined;
-  try {
-    const cookieStore = await cookies();
-    const cVal = cookieStore.get("x4g4t_role")?.value;
-    if (cVal === "admin" || cVal === "developer") {
-      roleOverride = cVal;
-    }
-  } catch {}
+  // Security Hardening: Cookie role overrides are strictly disabled in production
+  // to prevent unauthorized privilege escalation (CWE-269 / OWASP A01).
+  if (process.env.NODE_ENV !== "production" || process.env.ALLOW_DEMO_ROLE_SWITCH === "true") {
+    try {
+      const cookieStore = await cookies();
+      const cVal = cookieStore.get("x4g4t_role")?.value;
+      if (cVal === "admin" || cVal === "developer") {
+        roleOverride = cVal;
+      }
+    } catch {}
+  }
 
   const sharedOrgSlug = process.env.DEFAULT_ORG_SLUG || process.env.ENTERPRISE_ORG_SLUG;
   const defaultRole: IamRole = (process.env.DEFAULT_USER_ROLE === "admin" ? "admin" : "developer");
