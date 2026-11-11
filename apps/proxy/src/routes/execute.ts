@@ -7,6 +7,7 @@ import {
   sendHitlApprovalEmail,
   exportLogToExternalServices,
   validateDownstreamUrl,
+  validateDownstreamUrlWithDns,
   inspectPayloadDlp,
   DlpPolicyConfig,
   DlpAction
@@ -126,9 +127,9 @@ export const executeRoutes: FastifyPluginAsync = async (fastify) => {
         destination_host: destinationHost
       };
 
-      // SSRF validation
+      // SSRF validation with DNS rebinding protection
       if (downstream_url) {
-        const ssrfResult = validateDownstreamUrl(downstream_url, {
+        const ssrfResult = await validateDownstreamUrlWithDns(downstream_url, {
           allowLocal: process.env.NODE_ENV !== "production" || process.env.ALLOW_LOCAL_DOWNSTREAM === "true"
         });
         if (!ssrfResult.valid) {

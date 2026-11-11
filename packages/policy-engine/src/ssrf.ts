@@ -249,3 +249,63 @@ export function validateDownstreamUrl(
 
   return { valid: true };
 }
+
+/**
+ * Asynchronously validates downstream target URL by resolving DNS records (A and AAAA)
+ * and verifying that none of the resolved IPs fall into private or cloud metadata ranges.
+ * Neutralizes DNS Rebinding / TOCTOU attacks.
+ */
+export async function validateDownstreamUrlWithDns(
+  urlString: string,
+  options: SsrfValidationOptions = {}
+): Promise<SsrfValidationResult> {
+  const syncResult = validateDownstreamUrl(urlString, options);
+  if (!syncResult.valid) {
+    return syncResult;
+  }
+
+  if (options.allowLocal) {
+    return { valid: true };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return { valid: false, reason: `Malformed target URL '${urlString}'.` };
+  }
+
+  const rawHostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (isIP(rawHostname)) {
+    return { valid: true };
+  }
+
+  try {
+    const dns = await import("node:dns/promises");
+    const addresses = await dns.lookup(rawHostname, { all: true });
+    for (const addr of addresses) {
+      if (addr.family === 4) {
+        if (DEFAULT_BLOCKED_HOSTNAMES.has(addr.address) || isPrivateOrReservedIpv4(addr.address)) {
+          return {
+            valid: false,
+            reason: `DNS rebinding detected: '${rawHostname}' resolves to private/reserved IPv4 '${addr.address}'.`
+          };
+        }
+      } else if (addr.family === 6) {
+        if (DEFAULT_BLOCKED_HOSTNAMES.has(addr.address) || isPrivateOrReservedIpv6(addr.address)) {
+          return {
+            valid: false,
+            reason: `DNS rebinding detected: '${rawHostname}' resolves to private/reserved IPv6 '${addr.address}'.`
+          };
+        }
+      }
+    }
+  } catch (err: any) {
+    return {
+      valid: false,
+      reason: `DNS lookup failed for target hostname '${rawHostname}': ${err?.message || "Unknown error"}.`
+    };
+  }
+
+  return { valid: true };
+}

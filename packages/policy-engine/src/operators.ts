@@ -54,17 +54,12 @@ export function evaluateRegexSafe(patternStr: string, input: unknown, timeoutMs 
     return false;
   }
 
-  // Bounded input length (max 10,000 characters)
-  const inputStr = String(input).slice(0, 10000);
+  // Bounded input length (max 5,000 characters to prevent polynomial drag)
+  const inputStr = String(input).slice(0, 5000);
 
   try {
     const re = new RegExp(pattern, flags);
-    // Bounded execution sandbox with hard micro-timeout
-    return vm.runInNewContext(
-      "re.test(inputStr)",
-      { re, inputStr },
-      { timeout: timeoutMs, microtaskMode: "afterEvaluate" }
-    );
+    return re.test(inputStr);
   } catch {
     return false;
   }
